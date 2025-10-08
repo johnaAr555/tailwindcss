@@ -1,18 +1,19 @@
 import { walk, WalkAction } from '../../../../tailwindcss/src/ast'
-import { type Candidate, type Variant } from '../../../../tailwindcss/src/candidate'
+import { cloneCandidate, type Candidate, type Variant } from '../../../../tailwindcss/src/candidate'
 import type { Config } from '../../../../tailwindcss/src/compat/plugin-api'
 import type { DesignSystem } from '../../../../tailwindcss/src/design-system'
-import { printCandidate } from './candidates'
+import type { Writable } from '../../../../tailwindcss/src/types'
+import * as ValueParser from '../../../../tailwindcss/src/value-parser'
 
 export function migrateAutomaticVarInjection(
   designSystem: DesignSystem,
-  _userConfig: Config,
+  _userConfig: Config | null,
   rawCandidate: string,
 ): string {
   for (let readonlyCandidate of designSystem.parseCandidate(rawCandidate)) {
     // The below logic makes extended use of mutation. Since candidates in the
     // DesignSystem are cached, we can't mutate them directly.
-    let candidate = structuredClone(readonlyCandidate) as Candidate
+    let candidate = cloneCandidate(readonlyCandidate) as Writable<Candidate>
 
     let didChange = false
 
@@ -66,7 +67,7 @@ export function migrateAutomaticVarInjection(
     }
 
     if (didChange) {
-      return printCandidate(designSystem, candidate)
+      return designSystem.printCandidate(candidate)
     }
   }
   return rawCandidate
@@ -74,9 +75,23 @@ export function migrateAutomaticVarInjection(
 
 function injectVar(value: string): { value: string; didChange: boolean } {
   let didChange = false
-  if (value.startsWith('--') && !value.includes('(')) {
-    value = `var(${value})`
-    didChange = true
+  if (value.startsWith('--')) {
+    // E.g.:
+    //
+    // - `--my-color` → `var(--my-color)`             Convert variable
+    // - `--my-color,red` → `var(--my-color,red)`     Convert variable with fallback
+    // - `--theme(color.red)` → `--theme(color.red)`  Do not convert functions
+    //
+    if (
+      // No `(` definitely means there is no function
+      !value.includes('(') ||
+      // There could be a function call in the fallback value, but it cannot be
+      // top-level, so we can safely check the first part
+      ValueParser.parse(value)[0]?.kind !== 'function'
+    ) {
+      value = `var(${value})`
+      didChange = true
+    }
   } else if (value.startsWith(' --')) {
     value = value.slice(1)
     didChange = true

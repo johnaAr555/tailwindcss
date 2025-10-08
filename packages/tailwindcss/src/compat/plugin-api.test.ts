@@ -17,6 +17,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ addBase, theme }) {
@@ -80,6 +81,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(function ({ addUtilities, theme }) {
             addUtilities({
@@ -116,6 +118,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -164,6 +167,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -211,6 +215,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -243,14 +248,14 @@ describe('theme', async () => {
 
     expect(compiler.build(['animate-duration-316', 'animate-duration-slow']))
       .toMatchInlineSnapshot(`
-      ".animate-duration-316 {
-        animation-duration: 316ms;
-      }
-      .animate-duration-slow {
-        animation-duration: 800ms;
-      }
-      "
-    `)
+        ".animate-duration-316 {
+          animation-duration: 316ms;
+        }
+        .animate-duration-slow {
+          animation-duration: 800ms;
+        }
+        "
+      `)
   })
 
   test('plugin theme can have opacity modifiers', async () => {
@@ -265,6 +270,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(function ({ addUtilities, theme }) {
             addUtilities({
@@ -293,7 +299,9 @@ describe('theme', async () => {
       .variable {
         color: #ef4444;
         @supports (color: color-mix(in lab, red, red)) {
-          color: color-mix(in oklab, #ef4444 var(--opacity), transparent);
+          & {
+            color: color-mix(in oklab, #ef4444 var(--opacity), transparent);
+          }
         }
       }
       "
@@ -313,6 +321,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ addUtilities, theme }) {
@@ -370,7 +379,9 @@ describe('theme', async () => {
       .css-variable {
         color: rgba(255 0 0 / <alpha-value>);
         @supports (color: color-mix(in lab, red, red)) {
-          color: color-mix(in oklab, rgba(255 0 0 / <alpha-value>) var(--opacity), transparent);
+          & {
+            color: color-mix(in oklab, rgba(255 0 0 / <alpha-value>) var(--opacity), transparent);
+          }
         }
       }
       .js-fraction {
@@ -382,7 +393,9 @@ describe('theme', async () => {
       .js-variable {
         color: rgb(255 0 0 / 1);
         @supports (color: color-mix(in lab, red, red)) {
-          color: color-mix(in oklab, rgb(255 0 0 / 1) var(--opacity), transparent);
+          & {
+            color: color-mix(in oklab, rgb(255 0 0 / 1) var(--opacity), transparent);
+          }
         }
       }
       "
@@ -398,6 +411,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -452,6 +466,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -499,6 +514,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(function ({ matchUtilities, theme }) {
             matchUtilities(
@@ -557,6 +573,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -611,6 +628,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -660,6 +678,7 @@ describe('theme', async () => {
     await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ theme }) {
@@ -695,6 +714,7 @@ describe('theme', async () => {
     let { build } = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(function ({ matchUtilities, theme }) {
             function utility(name: string, themeKey: string) {
@@ -942,6 +962,7 @@ describe('theme', async () => {
     await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             ({ theme }) => {
@@ -984,6 +1005,7 @@ describe('theme', async () => {
     await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(({ theme }) => {
             fn(theme('transitionTimingFunction.DEFAULT'))
@@ -1015,6 +1037,7 @@ describe('theme', async () => {
     await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(({ theme }) => {
             fn(theme('color.red.100'))
@@ -1043,6 +1066,7 @@ describe('theme', async () => {
     await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(({ theme }) => {
             fn(theme('i.do.not.exist'))
@@ -1069,6 +1093,7 @@ describe('theme', async () => {
     let { build } = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(({ addUtilities, matchUtilities }) => {
             addUtilities({
@@ -1124,6 +1149,7 @@ describe('theme', async () => {
     let { build } = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(function ({ matchUtilities }) {
             function utility(name: string, themeKey: string) {
@@ -1342,6 +1368,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -1400,6 +1427,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(function ({ matchUtilities, theme }) {
             matchUtilities(
@@ -1446,6 +1474,7 @@ describe('theme', async () => {
     let compiler = await compile(input, {
       loadModule: async (id, base) => {
         return {
+          path: '',
           base,
           module: plugin(
             function ({ matchUtilities, theme }) {
@@ -1493,6 +1522,7 @@ describe('addBase', () => {
       loadModule: async (id, base) => {
         if (id === 'inside') {
           return {
+            path: '',
             base,
             module: plugin(function ({ addBase }) {
               addBase({ inside: { color: 'red' } })
@@ -1500,6 +1530,7 @@ describe('addBase', () => {
           }
         }
         return {
+          path: '',
           base,
           module: plugin(function ({ addBase }) {
             addBase({ outside: { color: 'red' } })
@@ -1508,10 +1539,11 @@ describe('addBase', () => {
       },
       async loadStylesheet() {
         return {
+          path: '',
+          base: '',
           content: css`
             @plugin "inside";
           `,
-          base: '',
         }
       },
     })
@@ -1533,6 +1565,8 @@ describe('addBase', () => {
 
     let compiler = await compile(input, {
       loadModule: async () => ({
+        path: '',
+        base: '/root',
         module: plugin(function ({ addBase }) {
           addBase({
             ':root': {
@@ -1542,7 +1576,6 @@ describe('addBase', () => {
             },
           })
         }),
-        base: '/root',
       }),
     })
 
@@ -1571,6 +1604,7 @@ describe('addVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ addVariant }: PluginAPI) => {
               addVariant('hocus', '&:hover, &:focus')
@@ -1605,6 +1639,7 @@ describe('addVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ addVariant }: PluginAPI) => {
               addVariant('hocus', ['&:hover', '&:focus'])
@@ -1640,6 +1675,7 @@ describe('addVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ addVariant }: PluginAPI) => {
               addVariant('hocus', {
@@ -1677,6 +1713,7 @@ describe('addVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ addVariant }: PluginAPI) => {
               addVariant('hocus', {
@@ -1728,6 +1765,7 @@ describe('addVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ addVariant }: PluginAPI) => {
               addVariant(
@@ -1769,6 +1807,7 @@ describe('addVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ addVariant }: PluginAPI) => {
               addVariant('hocus', {
@@ -1797,6 +1836,44 @@ describe('addVariant', () => {
       }"
     `)
   })
+
+  test('ignores variants that use :merge(…) and ensures `peer-*` and `group-*` rules work out of the box', async () => {
+    let { build } = await compile(
+      css`
+        @plugin "my-plugin";
+        @layer utilities {
+          @tailwind utilities;
+        }
+      `,
+      {
+        loadModule: async (id, base) => {
+          return {
+            path: '',
+            base,
+            module: ({ addVariant }: PluginAPI) => {
+              addVariant('optional', '&:optional')
+              addVariant('group-optional', { ':merge(.group):optional &': '@slot' })
+              addVariant('peer-optional', { '&': { ':merge(.peer):optional ~ &': '@slot' } })
+            },
+          }
+        },
+      },
+    )
+    let compiled = build([
+      'optional:flex',
+      'group-optional:flex',
+      'peer-optional:flex',
+      'group-optional/foo:flex',
+    ])
+
+    expect(optimizeCss(compiled).trim()).toMatchInlineSnapshot(`
+      "@layer utilities {
+        .group-optional\\:flex:is(:where(.group):optional *), .group-optional\\/foo\\:flex:is(:where(.group\\/foo):optional *), .peer-optional\\:flex:is(:where(.peer):optional ~ *), .optional\\:flex:optional {
+          display: flex;
+        }
+      }"
+    `)
+  })
 })
 
 describe('matchVariant', () => {
@@ -1811,6 +1888,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('potato', (flavor) => `.potato-${flavor} &`)
@@ -1845,6 +1923,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('potato', (flavor) => `@media (potato: ${flavor})`)
@@ -1883,6 +1962,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant(
@@ -1929,6 +2009,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('tooltip', (side) => `&${side}`, {
@@ -1968,6 +2049,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('alphabet', (side) => `&${side}`, {
@@ -2010,6 +2092,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('test', (selector) =>
@@ -2042,6 +2125,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('testmin', (value) => `@media (min-width: ${value})`, {
@@ -2094,6 +2178,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('testmin', (value) => `@media (min-width: ${value})`, {
@@ -2149,6 +2234,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('testmin', (value) => `@media (min-width: ${value})`, {
@@ -2221,6 +2307,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('testmin', (value) => `@media (min-width: ${value})`, {
@@ -2275,6 +2362,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('testmin', (value) => `@media (min-width: ${value})`, {
@@ -2347,6 +2435,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('testmin', (value) => `@media (min-width: ${value})`, {
@@ -2415,6 +2504,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('testmin', (value) => `@media (min-width: ${value})`, {
@@ -2495,6 +2585,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('foo', (value) => `.foo${value} &`, {
@@ -2529,6 +2620,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('foo', (value) => `.foo${value} &`)
@@ -2553,6 +2645,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('foo', (value) => `.foo${value === null ? '-good' : '-bad'} &`, {
@@ -2585,6 +2678,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('foo', (value) => `.foo${value === undefined ? '-good' : '-bad'} &`, {
@@ -2615,6 +2709,7 @@ describe('matchVariant', () => {
       {
         loadModule: async (id, base) => {
           return {
+            path: '',
             base,
             module: ({ matchVariant }: PluginAPI) => {
               matchVariant('my-container', (value, { modifier }) => {
@@ -2651,6 +2746,117 @@ describe('matchVariant', () => {
       }"
     `)
   })
+
+  test('ignores variants that use :merge(…)', async () => {
+    let { build } = await compile(
+      css`
+        @plugin "my-plugin";
+        @layer utilities {
+          @tailwind utilities;
+        }
+      `,
+      {
+        loadModule: async (id, base) => {
+          return {
+            path: '',
+            base,
+            module: ({ matchVariant }: PluginAPI) => {
+              matchVariant('optional', (flavor) => `&:optional:has(${flavor}) &`)
+              matchVariant('group-optional', (flavor) => `:merge(.group):optional:has(${flavor}) &`)
+              matchVariant('peer-optional', (flavor) => `:merge(.peer):optional:has(${flavor}) ~ &`)
+            },
+          }
+        },
+      },
+    )
+    let compiled = build([
+      'optional-[test]:flex',
+      'group-optional-[test]:flex',
+      'peer-optional-[test]:flex',
+      'group-optional-[test]/foo:flex',
+    ])
+
+    expect(optimizeCss(compiled).trim()).toMatchInlineSnapshot(`
+      "@layer utilities {
+        .group-optional-\\[test\\]\\:flex:is(:where(.group):optional:has(test) :where(.group) *), .group-optional-\\[test\\]\\/foo\\:flex:is(:where(.group\\/foo):optional:has(test) :where(.group\\/foo) *), .peer-optional-\\[test\\]\\:flex:is(:where(.peer):optional:has(test) :where(.peer) ~ *), .optional-\\[test\\]\\:flex:optional:has(test) .optional-\\[test\\]\\:flex {
+          display: flex;
+        }
+      }"
+    `)
+  })
+
+  test('ignores variants that use unknown values', async () => {
+    let { build } = await compile(
+      css`
+        @plugin "my-plugin";
+        @layer utilities {
+          @tailwind utilities;
+        }
+      `,
+      {
+        loadModule: async (id, base) => {
+          return {
+            path: '',
+            base,
+            module: ({ matchVariant }: PluginAPI) => {
+              matchVariant('foo', (flavor) => `&:is(${flavor})`, {
+                values: {
+                  known: 'known',
+                },
+              })
+            },
+          }
+        },
+      },
+    )
+
+    let compiled = build(['foo-[test]:flex', 'foo-known:flex', 'foo-unknown:flex'])
+
+    expect(optimizeCss(compiled).trim()).toMatchInlineSnapshot(`
+      "@layer utilities {
+        .foo-known\\:flex:is(known), .foo-\\[test\\]\\:flex:is(test) {
+          display: flex;
+        }
+      }"
+    `)
+  })
+
+  test('ignores variants that produce non-string values', async () => {
+    let { build } = await compile(
+      css`
+        @plugin "my-plugin";
+        @layer utilities {
+          @tailwind utilities;
+        }
+      `,
+      {
+        loadModule: async (id, base) => {
+          return {
+            path: '',
+            base,
+            module: ({ matchVariant }: PluginAPI) => {
+              matchVariant('foo', (flavor) => `&:is(${flavor})`, {
+                values: {
+                  string: 'some string',
+                  object: { some: 'object' },
+                },
+              })
+            },
+          }
+        },
+      },
+    )
+
+    let compiled = build(['foo-[test]:flex', 'foo-string:flex', 'foo-object:flex'])
+
+    expect(optimizeCss(compiled).trim()).toMatchInlineSnapshot(`
+      "@layer utilities {
+        .foo-string\\:flex:is(some string), .foo-\\[test\\]\\:flex:is(test) {
+          display: flex;
+        }
+      }"
+    `)
+  })
 })
 
 describe('addUtilities()', () => {
@@ -2669,6 +2875,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities({
@@ -2710,6 +2917,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities([
@@ -2743,6 +2951,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities([
@@ -2782,6 +2991,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities([
@@ -2816,6 +3026,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities({
@@ -2857,6 +3068,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities({
@@ -2913,6 +3125,7 @@ describe('addUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ addUtilities }: PluginAPI) => {
                 addUtilities({
@@ -2942,6 +3155,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities({
@@ -2985,6 +3199,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities({
@@ -3026,6 +3241,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities({
@@ -3122,6 +3338,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities({
@@ -3175,6 +3392,7 @@ describe('addUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addUtilities }: PluginAPI) => {
               addUtilities({
@@ -3221,6 +3439,45 @@ describe('addUtilities()', () => {
       }"
     `)
   })
+
+  test('values that are `false`, `null`, or `undefined` are discarded from CSS object ASTs', async () => {
+    let compiled = await compile(
+      css`
+        @plugin "my-plugin";
+        @tailwind utilities;
+      `,
+      {
+        async loadModule(id, base) {
+          return {
+            path: '',
+            base,
+            module: ({ addUtilities }: PluginAPI) => {
+              addUtilities({
+                '.foo': {
+                  a: 'red',
+                  // @ts-ignore: While this isn't valid per the types this did work in v3
+                  'z-index': 0,
+                  // @ts-ignore
+                  '.bar': false,
+                  // @ts-ignore
+                  '.baz': null,
+                  // @ts-ignore
+                  '.qux': undefined,
+                },
+              })
+            },
+          }
+        },
+      },
+    )
+
+    expect(compiled.build(['foo']).trim()).toMatchInlineSnapshot(`
+      ".foo {
+        a: red;
+        z-index: 0;
+      }"
+    `)
+  })
 })
 
 describe('matchUtilities()', () => {
@@ -3240,6 +3497,7 @@ describe('matchUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ matchUtilities }: PluginAPI) => {
                 matchUtilities(
@@ -3320,6 +3578,7 @@ describe('matchUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ matchUtilities }: PluginAPI) => {
                 matchUtilities(
@@ -3340,16 +3599,16 @@ describe('matchUtilities()', () => {
     }
 
     expect(optimizeCss(await run(['@w-1', 'hover:@w-1'])).trim()).toMatchInlineSnapshot(`
-        ".\\@w-1 {
+      ".\\@w-1 {
+        width: 1px;
+      }
+
+      @media (hover: hover) {
+        .hover\\:\\@w-1:hover {
           width: 1px;
         }
-
-        @media (hover: hover) {
-          .hover\\:\\@w-1:hover {
-            width: 1px;
-          }
-        }"
-      `)
+      }"
+    `)
   })
 
   test('custom functional utilities can return an array of rules', async () => {
@@ -3361,6 +3620,7 @@ describe('matchUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ matchUtilities }: PluginAPI) => {
               matchUtilities(
@@ -3410,6 +3670,7 @@ describe('matchUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ matchUtilities }: PluginAPI) => {
                 matchUtilities(
@@ -3480,6 +3741,7 @@ describe('matchUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ matchUtilities }: PluginAPI) => {
                 matchUtilities(
@@ -3554,6 +3816,7 @@ describe('matchUtilities()', () => {
           {
             async loadModule(id, base) {
               return {
+                path: '',
                 base,
                 module: ({ matchUtilities }: PluginAPI) => {
                   matchUtilities(
@@ -3609,6 +3872,7 @@ describe('matchUtilities()', () => {
           {
             async loadModule(id, base) {
               return {
+                path: '',
                 base,
                 module: ({ matchUtilities }: PluginAPI) => {
                   matchUtilities(
@@ -3647,6 +3911,7 @@ describe('matchUtilities()', () => {
           {
             async loadModule(id, base) {
               return {
+                path: '',
                 base,
                 module: ({ matchUtilities }: PluginAPI) => {
                   matchUtilities(
@@ -3691,6 +3956,7 @@ describe('matchUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ matchUtilities }: PluginAPI) => {
                 matchUtilities(
@@ -3818,6 +4084,7 @@ describe('matchUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ matchUtilities }: PluginAPI) => {
                 matchUtilities(
@@ -3903,6 +4170,7 @@ describe('matchUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ matchUtilities }: PluginAPI) => {
                 matchUtilities(
@@ -3961,6 +4229,7 @@ describe('matchUtilities()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ matchUtilities }: PluginAPI) => {
               matchUtilities(
@@ -4028,6 +4297,7 @@ describe('matchUtilities()', () => {
         {
           async loadModule(id, base) {
             return {
+              path: '',
               base,
               module: ({ matchUtilities }: PluginAPI) => {
                 matchUtilities({
@@ -4056,6 +4326,7 @@ describe('matchUtilities()', () => {
       {
         async loadModule(base) {
           return {
+            path: '',
             base,
             module: ({ matchUtilities }: PluginAPI) => {
               matchUtilities(
@@ -4122,6 +4393,7 @@ describe('addComponents()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ addComponents }: PluginAPI) => {
               addComponents({
@@ -4153,30 +4425,30 @@ describe('addComponents()', () => {
 
     expect(optimizeCss(compiled.build(['btn', 'btn-blue', 'btn-red'])).trim())
       .toMatchInlineSnapshot(`
-      ".btn {
-        border-radius: .25rem;
-        padding: .5rem 1rem;
-        font-weight: 600;
-      }
+        ".btn {
+          border-radius: .25rem;
+          padding: .5rem 1rem;
+          font-weight: 600;
+        }
 
-      .btn-blue {
-        color: #fff;
-        background-color: #3490dc;
-      }
+        .btn-blue {
+          color: #fff;
+          background-color: #3490dc;
+        }
 
-      .btn-blue:hover {
-        background-color: #2779bd;
-      }
+        .btn-blue:hover {
+          background-color: #2779bd;
+        }
 
-      .btn-red {
-        color: #fff;
-        background-color: #e3342f;
-      }
+        .btn-red {
+          color: #fff;
+          background-color: #e3342f;
+        }
 
-      .btn-red:hover {
-        background-color: #cc1f1a;
-      }"
-    `)
+        .btn-red:hover {
+          background-color: #cc1f1a;
+        }"
+      `)
   })
 })
 
@@ -4190,6 +4462,7 @@ describe('matchComponents()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ matchComponents }: PluginAPI) => {
               matchComponents(
@@ -4212,16 +4485,16 @@ describe('matchComponents()', () => {
 
     expect(optimizeCss(compiled.build(['prose', 'sm:prose-sm', 'hover:prose-lg'])).trim())
       .toMatchInlineSnapshot(`
-      ".prose {
-        --container-size: normal;
-      }
-
-      @media (hover: hover) {
-        .hover\\:prose-lg:hover {
-          --container-size: lg;
+        ".prose {
+          --container-size: normal;
         }
-      }"
-    `)
+
+        @media (hover: hover) {
+          .hover\\:prose-lg:hover {
+            --container-size: lg;
+          }
+        }"
+      `)
   })
 })
 
@@ -4235,6 +4508,7 @@ describe('prefix()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ prefix }: PluginAPI) => {
               fn(prefix('btn'))
@@ -4258,6 +4532,7 @@ describe('config()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ config }: PluginAPI) => {
               fn(config())
@@ -4285,6 +4560,7 @@ describe('config()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ config }: PluginAPI) => {
               fn(config('theme'))
@@ -4310,6 +4586,7 @@ describe('config()', () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: ({ config }: PluginAPI) => {
               fn(config('somekey', 'defaultvalue'))

@@ -9,6 +9,7 @@ import {
   type Declaration,
   type Rule,
 } from './ast'
+import type { Source } from './source-maps/source'
 
 const BACKSLASH = 0x5c
 const SLASH = 0x2f
@@ -18,6 +19,7 @@ const SINGLE_QUOTE = 0x27
 const COLON = 0x3a
 const SEMICOLON = 0x3b
 const LINE_BREAK = 0x0a
+const CARRIAGE_RETURN = 0xd
 const SPACE = 0x20
 const TAB = 0x09
 const OPEN_CURLY = 0x7b
@@ -30,9 +32,17 @@ const DASH = 0x2d
 const AT_SIGN = 0x40
 const EXCLAMATION_MARK = 0x21
 
-export function parse(input: string) {
-  if (input[0] === '\uFEFF') input = input.slice(1)
-  input = input.replaceAll('\r\n', '\n')
+export interface ParseOptions {
+  from?: string
+}
+
+export function parse(input: string, opts?: ParseOptions) {
+  let source: Source | null = opts?.from ? { file: opts.from, code: input } : null
+
+  // Note: it is important that any transformations of the input string
+  // *before* processing do NOT change the length of the string. This
+  // would invalidate the mechanism used to track source locations.
+  if (input[0] === '\uFEFF') input = ' ' + input.slice(1)
 
   let ast: AstNode[] = []
   let licenseComments: Comment[] = []
@@ -45,10 +55,21 @@ export function parse(input: string) {
   let buffer = ''
   let closingBracketStack = ''
 
+  // The start of the first non-whitespace character in the buffer
+  let bufferStart = 0
+
   let peekChar
 
   for (let i = 0; i < input.length; i++) {
     let currentChar = input.charCodeAt(i)
+
+    // Skip over the CR in CRLF. This allows code below to only check for a line
+    // break even if we're looking at a Windows newline. Peeking the input still
+    // has to check for CRLF but that happens less often.
+    if (currentChar === CARRIAGE_RETURN) {
+      peekChar = input.charCodeAt(i + 1)
+      if (peekChar === LINE_BREAK) continue
+    }
 
     // Current character is a `\` therefore the next character is escaped,
     // consume it together with the next character and continue.
@@ -61,6 +82,7 @@ export function parse(input: string) {
     // ```
     //
     if (currentChar === BACKSLASH) {
+      if (buffer === '') bufferStart = i
       buffer += input.slice(i, i + 2)
       i += 1
     }
@@ -104,73 +126,23 @@ export function parse(input: string) {
       // Collect all license comments so that we can hoist them to the top of
       // the AST.
       if (commentString.charCodeAt(2) === EXCLAMATION_MARK) {
-        licenseComments.push(comment(commentString.slice(2, -2)))
+        let node = comment(commentString.slice(2, -2))
+        licenseComments.push(node)
+
+        if (source) {
+          node.src = [source, start, i + 1]
+          node.dst = [source, start, i + 1]
+        }
       }
     }
 
     // Start of a string.
     else if (currentChar === SINGLE_QUOTE || currentChar === DOUBLE_QUOTE) {
-      let start = i
-
-      // We need to ensure that the closing quote is the same as the opening
-      // quote.
-      //
-      // E.g.:
-      //
-      // ```css
-      // .foo {
-      //   content: "This is a string with a 'quote' in it";
-      //                                     ^     ^         -> These are not the end of the string.
-      // }
-      // ```
-      for (let j = i + 1; j < input.length; j++) {
-        peekChar = input.charCodeAt(j)
-        // Current character is a `\` therefore the next character is escaped.
-        if (peekChar === BACKSLASH) {
-          j += 1
-        }
-
-        // End of the string.
-        else if (peekChar === currentChar) {
-          i = j
-          break
-        }
-
-        // End of the line without ending the string but with a `;` at the end.
-        //
-        // E.g.:
-        //
-        // ```css
-        // .foo {
-        //   content: "This is a string with a;
-        //                                    ^ Missing "
-        // }
-        // ```
-        else if (peekChar === SEMICOLON && input.charCodeAt(j + 1) === LINE_BREAK) {
-          throw new Error(
-            `Unterminated string: ${input.slice(start, j + 1) + String.fromCharCode(currentChar)}`,
-          )
-        }
-
-        // End of the line without ending the string.
-        //
-        // E.g.:
-        //
-        // ```css
-        // .foo {
-        //   content: "This is a string with a
-        //                                    ^ Missing "
-        // }
-        // ```
-        else if (peekChar === LINE_BREAK) {
-          throw new Error(
-            `Unterminated string: ${input.slice(start, j) + String.fromCharCode(currentChar)}`,
-          )
-        }
-      }
+      let end = parseString(input, i, currentChar)
 
       // Adjust `buffer` to include the string.
-      buffer += input.slice(start, i + 1)
+      buffer += input.slice(i, end + 1)
+      i = end
     }
 
     // Skip whitespace if the next character is also whitespace. This allows us
@@ -178,7 +150,12 @@ export function parse(input: string) {
     else if (
       (currentChar === SPACE || currentChar === LINE_BREAK || currentChar === TAB) &&
       (peekChar = input.charCodeAt(i + 1)) &&
-      (peekChar === SPACE || peekChar === LINE_BREAK || peekChar === TAB)
+      (peekChar === SPACE ||
+        peekChar === LINE_BREAK ||
+        peekChar === TAB ||
+        (peekChar === CARRIAGE_RETURN &&
+          (peekChar = input.charCodeAt(i + 2)) &&
+          peekChar == LINE_BREAK))
     ) {
       continue
     }
@@ -211,6 +188,11 @@ export function parse(input: string) {
         // Current character is a `\` therefore the next character is escaped.
         if (peekChar === BACKSLASH) {
           j += 1
+        }
+
+        // Start of a string.
+        else if (peekChar === SINGLE_QUOTE || peekChar === DOUBLE_QUOTE) {
+          j = parseString(input, j, peekChar)
         }
 
         // Start of a comment.
@@ -289,6 +271,11 @@ export function parse(input: string) {
       let declaration = parseDeclaration(buffer, colonIdx)
       if (!declaration) throw new Error(`Invalid custom property, expected a value`)
 
+      if (source) {
+        declaration.src = [source, start, i]
+        declaration.dst = [source, start, i]
+      }
+
       if (parent) {
         parent.nodes.push(declaration)
       } else {
@@ -308,6 +295,11 @@ export function parse(input: string) {
     // ```
     else if (currentChar === SEMICOLON && buffer.charCodeAt(0) === AT_SIGN) {
       node = parseAtRule(buffer)
+
+      if (source) {
+        node.src = [source, bufferStart, i]
+        node.dst = [source, bufferStart, i]
+      }
 
       // At-rule is nested inside of a rule, attach it to the parent.
       if (parent) {
@@ -341,8 +333,13 @@ export function parse(input: string) {
     ) {
       let declaration = parseDeclaration(buffer)
       if (!declaration) {
-        if (buffer.length === 0) throw new Error('Unexpected semicolon')
+        if (buffer.length === 0) continue
         throw new Error(`Invalid declaration: \`${buffer.trim()}\``)
+      }
+
+      if (source) {
+        declaration.src = [source, bufferStart, i]
+        declaration.dst = [source, bufferStart, i]
       }
 
       if (parent) {
@@ -363,6 +360,12 @@ export function parse(input: string) {
 
       // At this point `buffer` should resemble a selector or an at-rule.
       node = rule(buffer.trim())
+
+      // Track the source location for source maps
+      if (source) {
+        node.src = [source, bufferStart, i]
+        node.dst = [source, bufferStart, i]
+      }
 
       // Attach the rule to the parent in case it's nested.
       if (parent) {
@@ -410,6 +413,12 @@ export function parse(input: string) {
         if (buffer.charCodeAt(0) === AT_SIGN) {
           node = parseAtRule(buffer)
 
+          // Track the source location for source maps
+          if (source) {
+            node.src = [source, bufferStart, i]
+            node.dst = [source, bufferStart, i]
+          }
+
           // At-rule is nested inside of a rule, attach it to the parent.
           if (parent) {
             parent.nodes.push(node)
@@ -445,6 +454,11 @@ export function parse(input: string) {
           if (parent) {
             let node = parseDeclaration(buffer, colonIdx)
             if (!node) throw new Error(`Invalid declaration: \`${buffer.trim()}\``)
+
+            if (source) {
+              node.src = [source, bufferStart, i]
+              node.dst = [source, bufferStart, i]
+            }
 
             parent.nodes.push(node)
           }
@@ -495,6 +509,8 @@ export function parse(input: string) {
         continue
       }
 
+      if (buffer === '') bufferStart = i
+
       buffer += String.fromCharCode(currentChar)
     }
   }
@@ -503,7 +519,15 @@ export function parse(input: string) {
   // means that we have an at-rule that is not terminated with a semicolon at
   // the end of the input.
   if (buffer.charCodeAt(0) === AT_SIGN) {
-    ast.push(parseAtRule(buffer))
+    let node = parseAtRule(buffer)
+
+    // Track the source location for source maps
+    if (source) {
+      node.src = [source, bufferStart, input.length]
+      node.dst = [source, bufferStart, input.length]
+    }
+
+    ast.push(node)
   }
 
   // When we are done parsing then everything should be balanced. If we still
@@ -525,6 +549,9 @@ export function parse(input: string) {
 }
 
 export function parseAtRule(buffer: string, nodes: AstNode[] = []): AtRule {
+  let name = buffer
+  let params = ''
+
   // Assumption: The smallest at-rule in CSS right now is `@page`, this means
   //             that we can always skip the first 5 characters and start at the
   //             sixth (at index 5).
@@ -545,13 +572,13 @@ export function parseAtRule(buffer: string, nodes: AstNode[] = []): AtRule {
   for (let i = 5 /* '@page'.length */; i < buffer.length; i++) {
     let currentChar = buffer.charCodeAt(i)
     if (currentChar === SPACE || currentChar === OPEN_PAREN) {
-      let name = buffer.slice(0, i).trim()
-      let params = buffer.slice(i).trim()
-      return atRule(name, params, nodes)
+      name = buffer.slice(0, i)
+      params = buffer.slice(i)
+      break
     }
   }
 
-  return atRule(buffer.trim(), '', nodes)
+  return atRule(name.trim(), params.trim(), nodes)
 }
 
 function parseDeclaration(
@@ -565,4 +592,74 @@ function parseDeclaration(
     buffer.slice(colonIdx + 1, importantIdx === -1 ? buffer.length : importantIdx).trim(),
     importantIdx !== -1,
   )
+}
+
+function parseString(input: string, startIdx: number, quoteChar: number): number {
+  let peekChar: number
+
+  // We need to ensure that the closing quote is the same as the opening
+  // quote.
+  //
+  // E.g.:
+  //
+  // ```css
+  // .foo {
+  //   content: "This is a string with a 'quote' in it";
+  //                                     ^     ^         -> These are not the end of the string.
+  // }
+  // ```
+  for (let i = startIdx + 1; i < input.length; i++) {
+    peekChar = input.charCodeAt(i)
+
+    // Current character is a `\` therefore the next character is escaped.
+    if (peekChar === BACKSLASH) {
+      i += 1
+    }
+
+    // End of the string.
+    else if (peekChar === quoteChar) {
+      return i
+    }
+
+    // End of the line without ending the string but with a `;` at the end.
+    //
+    // E.g.:
+    //
+    // ```css
+    // .foo {
+    //   content: "This is a string with a;
+    //                                    ^ Missing "
+    // }
+    // ```
+    else if (
+      peekChar === SEMICOLON &&
+      (input.charCodeAt(i + 1) === LINE_BREAK ||
+        (input.charCodeAt(i + 1) === CARRIAGE_RETURN && input.charCodeAt(i + 2) === LINE_BREAK))
+    ) {
+      throw new Error(
+        `Unterminated string: ${input.slice(startIdx, i + 1) + String.fromCharCode(quoteChar)}`,
+      )
+    }
+
+    // End of the line without ending the string.
+    //
+    // E.g.:
+    //
+    // ```css
+    // .foo {
+    //   content: "This is a string with a
+    //                                    ^ Missing "
+    // }
+    // ```
+    else if (
+      peekChar === LINE_BREAK ||
+      (peekChar === CARRIAGE_RETURN && input.charCodeAt(i + 1) === LINE_BREAK)
+    ) {
+      throw new Error(
+        `Unterminated string: ${input.slice(startIdx, i) + String.fromCharCode(quoteChar)}`,
+      )
+    }
+  }
+
+  return startIdx
 }

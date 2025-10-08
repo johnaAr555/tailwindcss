@@ -30,7 +30,7 @@ jobs:
           - vite
           - cli
           - postcss
-          - workers
+          - oxide
           - webpack
 
         # Exclude windows and macos from being built on feature branches
@@ -52,6 +52,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+
+      - run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -76,11 +80,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ./target/
             ./crates/node/*.node
-            ./crates/node/index.js
+            ./crates/node/*.wasm
             ./crates/node/index.d.ts
+            ./crates/node/index.js
+            ./crates/node/browser.js
+            ./crates/node/tailwindcss-oxide.wasi-browser.js
+            ./crates/node/tailwindcss-oxide.wasi.cjs
+            ./crates/node/wasi-worker-browser.mjs
+            ./crates/node/wasi-worker.mjs
           key: ${{ runner.os }}-oxide-${{ hashFiles('./crates/**/*') }}
+
+      - name: Setup WASM target
+        run: rustup target add wasm32-wasip1-threads
 
       - name: Install dependencies
         run: pnpm install
@@ -91,8 +103,18 @@ jobs:
           CARGO_PROFILE_RELEASE_LTO: 'off'
           CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: 'lld-link'
 
-      - name: Test ${{ matrix.integration }}
-        run: pnpm run test:integrations ./integrations/${{ matrix.integration }}
+      - name: Test ${{ matrix.integration }} 1/3
+        run: pnpm run test:integrations ./integrations/${{ matrix.integration }} --shard 1/3
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+      - name: Test ${{ matrix.integration }} 2/3
+        run: pnpm run test:integrations ./integrations/${{ matrix.integration }} --shard 2/3
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+      - name: Test ${{ matrix.integration }} 3/3
+        run: pnpm run test:integrations ./integrations/${{ matrix.integration }} --shard 3/3
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 

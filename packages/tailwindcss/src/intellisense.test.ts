@@ -172,10 +172,12 @@ test('Utilities do not show wrapping selector in intellisense', async () => {
 
   let design = await __unstable__loadDesignSystem(input, {
     loadStylesheet: async (_, base) => ({
+      path: '',
       base,
       content: '@tailwind utilities;',
     }),
     loadModule: async () => ({
+      path: '',
       base: '',
       module: {
         important: '#app',
@@ -208,6 +210,7 @@ test('Utilities, when marked as important, show as important in intellisense', a
 
   let design = await __unstable__loadDesignSystem(input, {
     loadStylesheet: async (_, base) => ({
+      path: '',
       base,
       content: '@tailwind utilities;',
     }),
@@ -239,10 +242,12 @@ test('Static utilities from plugins are listed in hovers and completions', async
 
   let design = await __unstable__loadDesignSystem(input, {
     loadStylesheet: async (_, base) => ({
+      path: '',
       base,
       content: '@tailwind utilities;',
     }),
     loadModule: async () => ({
+      path: '',
       base: '',
       module: plugin(({ addUtilities }) => {
         addUtilities({
@@ -274,10 +279,12 @@ test('Functional utilities from plugins are listed in hovers and completions', a
 
   let design = await __unstable__loadDesignSystem(input, {
     loadStylesheet: async (_, base) => ({
+      path: '',
       base,
       content: '@tailwind utilities;',
     }),
     loadModule: async () => ({
+      path: '',
       base: '',
       module: plugin(({ matchUtilities }) => {
         matchUtilities(
@@ -420,10 +427,12 @@ test('Custom at-rule variants do not show up as a value under `group`', async ()
 
   let design = await __unstable__loadDesignSystem(input, {
     loadStylesheet: async (_, base) => ({
+      path: '',
       base,
       content: '@tailwind utilities;',
     }),
     loadModule: async () => ({
+      path: '',
       base: '',
       module: plugin(({ addVariant }) => {
         addVariant('variant-3', '@media baz')
@@ -487,7 +496,7 @@ test('Custom functional @utility', async () => {
 
     @utility example-* {
       font-size: --value(--text);
-      line-height: --value(--text- * --line-height);
+      line-height: --value(--text-* --line-height);
       line-height: --modifier(--leading, 'normal');
     }
 
@@ -504,12 +513,13 @@ test('Custom functional @utility', async () => {
     }
 
     @utility -negative-* {
-      margin: --value(--tab-size- *);
+      margin: --value(--tab-size-*);
     }
   `
 
   let design = await __unstable__loadDesignSystem(input, {
     loadStylesheet: async (_, base) => ({
+      path: '',
       base,
       content: '@tailwind utilities;',
     }),
@@ -562,6 +572,39 @@ test('Custom functional @utility', async () => {
   expect(classMap.get('example-xs')?.modifiers).toEqual(['normal', 'foo', 'bar'])
 })
 
+test('Custom utilities sharing a root with built-in utilities should merge suggestions', async () => {
+  let input = css`
+    @import 'tailwindcss/utilities';
+    @theme {
+      --font-sans: sans-serif;
+    }
+
+    @theme {
+      --font-weight-custom: 1234;
+      --font-weight-bold: bold; /* Overlap with existing utility */
+    }
+
+    @utility font-* {
+      --my-font-weight: --value(--font-weight-*);
+    }
+  `
+
+  let design = await __unstable__loadDesignSystem(input, {
+    loadStylesheet: async (_, base) => ({
+      path: '',
+      base,
+      content: '@tailwind utilities;',
+    }),
+  })
+
+  let classMap = new Map(design.getClassList())
+  let classNames = Array.from(classMap.keys())
+
+  expect(classNames).toContain('font-sans') // Existing font-family utility
+  expect(classNames).toContain('font-bold') // Existing font-family utility & custom font-weight utility
+  expect(classNames).toContain('font-custom') // Custom font-weight utility
+})
+
 test('Theme keys with underscores are suggested with underscores', async () => {
   let input = css`
     @import 'tailwindcss/utilities';
@@ -579,22 +622,161 @@ test('Theme keys with underscores are suggested with underscores', async () => {
       /* This will get suggeted with an underscore */
       --spacing-logo_margin: 0.875rem;
     }
+
+    @utility ex-* {
+      width: --value(--spacing-*);
+    }
   `
 
   let design = await __unstable__loadDesignSystem(input, {
     loadStylesheet: async (_, base) => ({
+      path: '',
       base,
       content: '@tailwind utilities;',
     }),
   })
 
-  let entries = design.getClassList().filter(([name]) => name.startsWith('p-'))
+  let entries = design
+    .getClassList()
+    .filter(([name]) => name.startsWith('p-') || name.startsWith('ex-'))
 
   expect(entries).toContainEqual(['p-1.5', { modifiers: [] }])
   expect(entries).toContainEqual(['p-2.5', { modifiers: [] }])
   expect(entries).toContainEqual(['p-logo_margin', { modifiers: [] }])
 
+  expect(entries).toContainEqual(['ex-1.5', { modifiers: [] }])
+  expect(entries).toContainEqual(['ex-2.5', { modifiers: [] }])
+  expect(entries).toContainEqual(['ex-logo_margin', { modifiers: [] }])
+
   expect(entries).not.toContainEqual(['p-1_5', { modifiers: [] }])
   expect(entries).not.toContainEqual(['p-2_5', { modifiers: [] }])
   expect(entries).not.toContainEqual(['p-logo.margin', { modifiers: [] }])
+
+  expect(entries).not.toContainEqual(['ex-1_5', { modifiers: [] }])
+  expect(entries).not.toContainEqual(['ex-2_5', { modifiers: [] }])
+  expect(entries).not.toContainEqual(['ex-logo.margin', { modifiers: [] }])
+})
+
+test('shadow utility default suggestions', async () => {
+  let input = css`
+    @theme {
+      /* nothing */
+    }
+  `
+
+  let design = await __unstable__loadDesignSystem(input)
+  let classNames = design.getClassList().map(([name]) => name)
+
+  expect(classNames).not.toContain('shadow')
+  expect(classNames).not.toContain('inset-shadow')
+  expect(classNames).not.toContain('text-shadow')
+
+  input = css`
+    @theme {
+      --shadow: 0 0 0 solid black;
+      --text-shadow: 0 0 0 solid black;
+      --inset-shadow: 0 0 0 solid black;
+    }
+  `
+
+  design = await __unstable__loadDesignSystem(input)
+  classNames = design.getClassList().map(([name]) => name)
+
+  expect(classNames).toContain('shadow')
+  expect(classNames).toContain('inset-shadow')
+  expect(classNames).toContain('text-shadow')
+})
+
+test('Custom @utility and existing utility with names matching theme keys dont give duplicate results', async () => {
+  let input = css`
+    @theme reference {
+      --leading-sm: 0.25rem;
+      --text-header: 1.5rem;
+    }
+
+    @utility text-header {
+      text-transform: uppercase;
+    }
+  `
+
+  let design = await __unstable__loadDesignSystem(input)
+
+  let classList = design.getClassList()
+  let classMap = new Map(classList)
+  let matches = classList.filter(([className]) => className === 'text-header')
+
+  expect(matches).toHaveLength(1)
+  expect(classMap.get('text-header')?.modifiers).toEqual(['sm'])
+})
+
+test('matchVariant', async () => {
+  let input = css`
+    @import 'tailwindcss/utilities';
+    @plugin "./plugin.js";
+  `
+
+  let design = await __unstable__loadDesignSystem(input, {
+    loadStylesheet: async (_, base) => ({
+      path: '',
+      base,
+      content: '@tailwind utilities;',
+    }),
+    loadModule: async () => ({
+      path: '',
+      base: '',
+      module: plugin(({ matchVariant }) => {
+        matchVariant('foo', (val) => `&:is(${val})`, {
+          values: {
+            DEFAULT: '1',
+            a: 'a',
+            b: 'b',
+          },
+        })
+      }),
+    }),
+  })
+
+  let variants = design.getVariants()
+  let v1 = variants.find((v) => v.name === 'foo')!
+  expect(v1).not.toBeUndefined()
+
+  expect(v1.hasDash).toEqual(true)
+  expect(v1.isArbitrary).toEqual(true)
+  expect(v1.name).toEqual('foo')
+  expect(v1.values).toEqual(['a', 'b'])
+})
+
+test('matchUtilities discards internal only helpers from suggestions when using the theme function', async () => {
+  let input = css`
+    @import 'tailwindcss/utilities';
+    @plugin "./plugin.js";
+
+    @theme {
+      --color-red: red;
+    }
+  `
+
+  let design = await __unstable__loadDesignSystem(input, {
+    loadStylesheet: async (_, base) => ({
+      path: '',
+      base,
+      content: '@tailwind utilities;',
+    }),
+    loadModule: async () => ({
+      path: '',
+      base: '',
+      module: plugin(({ matchUtilities, theme }) => {
+        matchUtilities({ foo: (val) => ({ color: val }) }, { values: theme('colors') })
+        matchUtilities({ bar: (val) => ({ color: val }) }, { values: theme('transitionDuration') })
+      }),
+    }),
+  })
+
+  let classNames = design.getClassList().map((e) => e[0])
+
+  expect(classNames).not.toContain('foo-__BARE_VALUE__')
+  expect(classNames).not.toContain('bar-__BARE_VALUE__')
+
+  expect(classNames).not.toContain('foo-__CSS_VALUES__')
+  expect(classNames).not.toContain('bar-__CSS_VALUES__')
 })

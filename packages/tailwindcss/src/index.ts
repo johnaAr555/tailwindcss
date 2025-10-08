@@ -22,16 +22,18 @@ import { substituteAtImports } from './at-import'
 import { applyCompatibilityHooks } from './compat/apply-compat-hooks'
 import type { UserConfig } from './compat/config/types'
 import { type Plugin } from './compat/plugin-api'
-import { applyVariant, compileCandidates } from './compile'
+import { compileCandidates } from './compile'
 import { substituteFunctions } from './css-functions'
 import * as CSS from './css-parser'
 import { buildDesignSystem, type DesignSystem } from './design-system'
+import { createSourceMap, type DecodedSourceMap } from './source-maps/source-map'
 import { Theme, ThemeOptions } from './theme'
 import { createCssUtility } from './utilities'
 import { expand } from './utils/brace-expansion'
 import { escape, unescape } from './utils/escape'
 import { segment } from './utils/segment'
-import { compoundsForSelectors, IS_VALID_VARIANT_NAME } from './variants'
+import { topologicalSort } from './utils/topological-sort'
+import { compoundsForSelectors, IS_VALID_VARIANT_NAME, substituteAtVariant } from './variants'
 export type Config = UserConfig
 
 const IS_VALID_PREFIX = /^[a-z]+$/
@@ -51,13 +53,25 @@ export const enum Polyfills {
 
 type CompileOptions = {
   base?: string
+  from?: string
   polyfills?: Polyfills
   loadModule?: (
     id: string,
     base: string,
     resourceHint: 'plugin' | 'config',
-  ) => Promise<{ module: Plugin | Config; base: string }>
-  loadStylesheet?: (id: string, base: string) => Promise<{ content: string; base: string }>
+  ) => Promise<{
+    path: string
+    base: string
+    module: Plugin | Config
+  }>
+  loadStylesheet?: (
+    id: string,
+    base: string,
+  ) => Promise<{
+    path: string
+    base: string
+    content: string
+  }>
 }
 
 function throwOnLoadModule(): never {
@@ -119,12 +133,16 @@ export const enum Features {
 
   // `@variant` was used
   Variants = 1 << 5,
+
+  // `@theme` was used
+  AtTheme = 1 << 6,
 }
 
 async function parseCss(
   ast: AstNode[],
   {
     base = '',
+    from,
     loadModule = throwOnLoadModule,
     loadStylesheet = throwOnLoadStylesheet,
   }: CompileOptions = {},
@@ -132,11 +150,12 @@ async function parseCss(
   let features = Features.None
   ast = [contextNode({ base }, ast)] as AstNode[]
 
-  features |= await substituteAtImports(ast, base, loadStylesheet)
+  features |= await substituteAtImports(ast, base, loadStylesheet, 0, from !== undefined)
 
   let important = null as boolean | null
   let theme = new Theme()
-  let customVariants: ((designSystem: DesignSystem) => void)[] = []
+  let customVariants = new Map<string, (designSystem: DesignSystem) => void>()
+  let customVariantDependencies = new Map<string, Set<string>>()
   let customUtilities: ((designSystem: DesignSystem) => void)[] = []
   let firstThemeRule = null as StyleRule | null
   let utilitiesNode = null as AtRule | null
@@ -158,6 +177,14 @@ async function parseCss(
     ) {
       // Any additional `@tailwind utilities` nodes can be removed
       if (utilitiesNode !== null) {
+        replaceWith([])
+        return
+      }
+
+      // When inside `@reference` we should treat `@tailwind utilities` as if
+      // it wasn't there in the first place. This should also let `build()`
+      // return the cached static AST.
+      if (context.reference) {
         replaceWith([])
         return
       }
@@ -207,6 +234,18 @@ async function parseCss(
 
       let utility = createCssUtility(node)
       if (utility === null) {
+        if (!node.params.endsWith('-*')) {
+          if (node.params.endsWith('*')) {
+            throw new Error(
+              `\`@utility ${node.params}\` defines an invalid utility name. A functional utility must end in \`-*\`.`,
+            )
+          } else if (node.params.includes('*')) {
+            throw new Error(
+              `\`@utility ${node.params}\` defines an invalid utility name. The dynamic portion marked by \`-*\` must appear once at the end.`,
+            )
+          }
+        }
+
         throw new Error(
           `\`@utility ${node.params}\` defines an invalid utility name. Utilities should be alphanumeric and start with a lowercase letter.`,
         )
@@ -322,7 +361,7 @@ async function parseCss(
 
       if (!IS_VALID_VARIANT_NAME.test(name)) {
         throw new Error(
-          `\`@custom-variant ${name}\` defines an invalid variant name. Variants should only contain alphanumeric, dashes or underscore characters.`,
+          `\`@custom-variant ${name}\` defines an invalid variant name. Variants should only contain alphanumeric, dashes, or underscore characters and start with a lowercase letter or number.`,
         )
       }
 
@@ -356,7 +395,7 @@ async function parseCss(
           }
         }
 
-        customVariants.push((designSystem) => {
+        customVariants.set(name, (designSystem) => {
           designSystem.variants.static(
             name,
             (r) => {
@@ -377,6 +416,7 @@ async function parseCss(
             },
           )
         })
+        customVariantDependencies.set(name, new Set<string>())
 
         return
       }
@@ -397,9 +437,17 @@ async function parseCss(
       // }
       // ```
       else {
-        customVariants.push((designSystem) => {
-          designSystem.variants.fromAst(name, node.nodes)
+        let dependencies = new Set<string>()
+        walk(node.nodes, (child) => {
+          if (child.kind === 'at-rule' && child.name === '@variant') {
+            dependencies.add(child.params)
+          }
         })
+
+        customVariants.set(name, (designSystem) => {
+          designSystem.variants.fromAst(name, node.nodes, designSystem)
+        })
+        customVariantDependencies.set(name, dependencies)
 
         return
       }
@@ -495,6 +543,8 @@ async function parseCss(
     if (node.name === '@theme') {
       let [themeOptions, themePrefix] = parseThemeOptions(node.params)
 
+      features |= Features.AtTheme
+
       if (context.reference) {
         themeOptions |= ThemeOptions.REFERENCE
       }
@@ -520,7 +570,7 @@ async function parseCss(
 
         if (child.kind === 'comment') return
         if (child.kind === 'declaration' && child.property.startsWith('--')) {
-          theme.add(unescape(child.property), child.value ?? '', themeOptions)
+          theme.add(unescape(child.property), child.value ?? '', themeOptions, child.src)
           return
         }
 
@@ -538,6 +588,7 @@ async function parseCss(
       // theme later, and delete any other `@theme` rules.
       if (!firstThemeRule) {
         firstThemeRule = styleRule(':root, :host', [])
+        firstThemeRule.src = node.src
         replaceWith([firstThemeRule])
       } else {
         replaceWith([])
@@ -570,8 +621,27 @@ async function parseCss(
     sources,
   })
 
-  for (let customVariant of customVariants) {
-    customVariant(designSystem)
+  for (let name of customVariants.keys()) {
+    // Pre-register the variant to ensure its position in the variant list is
+    // based on the order we see them in the CSS.
+    designSystem.variants.static(name, () => {})
+  }
+
+  // Register custom variants in order
+  for (let variant of topologicalSort(customVariantDependencies, {
+    onCircularDependency(path, start) {
+      let output = toCss(
+        path.map((name, idx) => {
+          return atRule('@custom-variant', name, [atRule('@variant', path[idx + 1] ?? start, [])])
+        }),
+      )
+        .replaceAll(';', ' { … }')
+        .replace(`@custom-variant ${start} {`, `@custom-variant ${start} { /* ← */`)
+
+      throw new Error(`Circular dependency detected in custom variants:\n\n${output}`)
+    },
+  })) {
+    customVariants.get(variant)?.(designSystem)
   }
 
   for (let customUtility of customUtilities) {
@@ -585,8 +655,9 @@ async function parseCss(
 
     for (let [key, value] of designSystem.theme.entries()) {
       if (value.options & ThemeOptions.REFERENCE) continue
-
-      nodes.push(decl(escape(key), value.value))
+      let node = decl(escape(key), value.value)
+      node.src = value.src
+      nodes.push(node)
     }
 
     let keyframesRules = designSystem.theme.getKeyframes()
@@ -600,6 +671,10 @@ async function parseCss(
     firstThemeRule.nodes = [context({ theme: true }, nodes)]
   }
 
+  features |= substituteAtVariant(ast, designSystem)
+  features |= substituteFunctions(ast, designSystem)
+  features |= substituteAtApply(ast, designSystem)
+
   // Replace the `@tailwind utilities` node with a context since it prints
   // children directly.
   if (utilitiesNode) {
@@ -607,33 +682,6 @@ async function parseCss(
     node.kind = 'context'
     node.context = {}
   }
-
-  // Replace the `@variant` at-rules with the actual variant rules.
-  if (variantNodes.length > 0) {
-    for (let variantNode of variantNodes) {
-      // Starting with the `&` rule node
-      let node = styleRule('&', variantNode.nodes)
-
-      let variant = variantNode.params
-
-      let variantAst = designSystem.parseVariant(variant)
-      if (variantAst === null) {
-        throw new Error(`Cannot use \`@variant\` with unknown variant: ${variant}`)
-      }
-
-      let result = applyVariant(node, variantAst, designSystem.variants)
-      if (result === null) {
-        throw new Error(`Cannot use \`@variant\` with variant: ${variant}`)
-      }
-
-      // Update the variant at-rule node, to be the `&` rule node
-      Object.assign(variantNode, node)
-    }
-    features |= Features.Variants
-  }
-
-  features |= substituteFunctions(ast, designSystem)
-  features |= substituteAtApply(ast, designSystem)
 
   // Remove `@utility`, we couldn't replace it before yet because we had to
   // handle the nested `@apply` at-rules first.
@@ -740,6 +788,16 @@ export async function compileAst(
         onInvalidCandidate,
       }).astNodes
 
+      if (opts.from) {
+        walk(newNodes, (node) => {
+          // We do this conditionally to preserve source locations from both
+          // `@utility` and `@custom-variant`. Even though generated nodes are
+          // cached this should be fine because `utilitiesNode.src` should not
+          // change without a full rebuild which destroys the cache.
+          node.src ??= utilitiesNode.src
+        })
+      }
+
       // If no new ast nodes were generated, then we can return the original
       // CSS. This currently assumes that we only add new ast nodes and never
       // remove any.
@@ -758,6 +816,8 @@ export async function compileAst(
   }
 }
 
+export type { DecodedSourceMap }
+
 export async function compile(
   css: string,
   opts: CompileOptions = {},
@@ -766,8 +826,9 @@ export async function compile(
   root: Root
   features: Features
   build(candidates: string[]): string
+  buildSourceMap(): DecodedSourceMap
 }> {
-  let ast = CSS.parse(css)
+  let ast = CSS.parse(css, { from: opts.from })
   let api = await compileAst(ast, opts)
   let compiledAst = ast
   let compiledCss = css
@@ -781,10 +842,16 @@ export async function compile(
         return compiledCss
       }
 
-      compiledCss = toCss(newAst)
+      compiledCss = toCss(newAst, !!opts.from)
       compiledAst = newAst
 
       return compiledCss
+    },
+
+    buildSourceMap() {
+      return createSourceMap({
+        ast: compiledAst,
+      })
     },
   }
 }

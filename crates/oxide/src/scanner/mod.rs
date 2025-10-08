@@ -16,10 +16,13 @@ use fxhash::{FxHashMap, FxHashSet};
 use ignore::{gitignore::GitignoreBuilder, WalkBuilder};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{self, Arc, Mutex};
 use std::time::SystemTime;
 use tracing::event;
+use tracing_subscriber::fmt::writer::BoxMakeWriter;
 
 // @source "some/folder";               // This is auto source detection
 // @source "some/folder/**/*";          // This is auto source detection
@@ -35,16 +38,65 @@ static SHOULD_TRACE: sync::LazyLock<bool> = sync::LazyLock::new(
     || matches!(std::env::var("DEBUG"), Ok(value) if value.eq("*") || (value.contains("tailwindcss:oxide") && !value.contains("-tailwindcss:oxide"))),
 );
 
+fn dim(input: &str) -> String {
+    format!("\u{001b}[2m{input}\u{001b}[22m")
+}
+
+fn blue(input: &str) -> String {
+    format!("\u{001b}[34m{input}\u{001b}[39m")
+}
+
+fn highlight(input: &str) -> String {
+    format!("{}{}{}", dim(&blue("`")), blue(input), dim(&blue("`")))
+}
+
 fn init_tracing() {
     if !*SHOULD_TRACE {
         return;
     }
 
+    let file_path = format!("tailwindcss-{}.log", std::process::id());
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&file_path)
+        .unwrap_or_else(|_| panic!("Failed to open {file_path}"));
+
+    let file_path = Path::new(&file_path);
+    let absolute_file_path = dunce::canonicalize(file_path)
+        .unwrap_or_else(|_| panic!("Failed to canonicalize {file_path:?}"));
+    eprintln!(
+        "{} Writing debug info to: {}\n",
+        dim("[DEBUG]"),
+        highlight(absolute_file_path.as_path().to_str().unwrap())
+    );
+
+    let file = Arc::new(Mutex::new(file));
+
+    let writer: BoxMakeWriter = BoxMakeWriter::new({
+        let file = file.clone();
+        move || Box::new(MutexWriter(file.clone())) as Box<dyn Write + Send>
+    });
+
     _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::ACTIVE)
+        .with_writer(writer)
+        .with_ansi(false)
         .compact()
         .try_init();
+}
+
+struct MutexWriter(Arc<Mutex<std::fs::File>>);
+
+impl Write for MutexWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0.lock().unwrap().write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.lock().unwrap().flush()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -101,7 +153,23 @@ pub struct Scanner {
 
 impl Scanner {
     pub fn new(sources: Vec<PublicSourceEntry>) -> Self {
+        init_tracing();
+
+        if *SHOULD_TRACE {
+            event!(tracing::Level::INFO, "Provided sources:");
+            for source in &sources {
+                event!(tracing::Level::INFO, "Source: {:?}", source);
+            }
+        }
+
         let sources = Sources::new(public_source_entries_to_private_source_entries(sources));
+
+        if *SHOULD_TRACE {
+            event!(tracing::Level::INFO, "Optimized sources:");
+            for source in sources.iter() {
+                event!(tracing::Level::INFO, "Source: {:?}", source);
+            }
+        }
 
         Self {
             sources: sources.clone(),
@@ -111,7 +179,6 @@ impl Scanner {
     }
 
     pub fn scan(&mut self) -> Vec<String> {
-        init_tracing();
         self.scan_sources();
 
         // TODO: performance improvement, bail early if we don't have any changed content
@@ -394,7 +461,10 @@ impl Scanner {
 fn read_changed_content(c: ChangedContent) -> Option<Vec<u8>> {
     let (content, extension) = match c {
         ChangedContent::File(file, extension) => match std::fs::read(&file) {
-            Ok(content) => (content, extension),
+            Ok(content) => {
+                event!(tracing::Level::INFO, "Reading {:?}", file);
+                (content, extension)
+            }
             Err(e) => {
                 event!(tracing::Level::ERROR, "Failed to read file: {:?}", e);
                 return None;
@@ -412,13 +482,16 @@ pub fn pre_process_input(content: &[u8], extension: &str) -> Vec<u8> {
 
     match extension {
         "clj" | "cljs" | "cljc" => Clojure.process(content),
+        "heex" | "eex" | "ex" | "exs" => Elixir.process(content),
         "cshtml" | "razor" => Razor.process(content),
         "haml" => Haml.process(content),
         "json" => Json.process(content),
+        "md" | "mdx" => Markdown.process(content),
         "pug" => Pug.process(content),
         "rb" | "erb" => Ruby.process(content),
-        "slim" => Slim.process(content),
+        "slim" | "slang" => Slim.process(content),
         "svelte" => Svelte.process(content),
+        "rs" => Rust.process(content),
         "vue" => Vue.process(content),
         _ => content.to_vec(),
     }
@@ -630,7 +703,9 @@ fn create_walker(sources: Sources) -> Option<WalkBuilder> {
     }
 
     // Setup auto source detection rules
-    builder.add_gitignore(auto_source_detection::RULES.clone());
+    for ignore in auto_source_detection::RULES.iter() {
+        builder.add_gitignore(ignore.clone());
+    }
 
     // Setup ignores based on `@source` definitions
     for (base, patterns) in ignores {
@@ -704,7 +779,11 @@ fn create_walker(sources: Sources) -> Option<WalkBuilder> {
 
             match (current_time, previous_time) {
                 (Some(current), Some(prev)) if prev == current => false,
-                _ => true,
+                _ => {
+                    event!(tracing::Level::INFO, "Discovering {:?}", path);
+
+                    true
+                }
             }
         }
     });

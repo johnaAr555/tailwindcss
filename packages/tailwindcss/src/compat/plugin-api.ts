@@ -1,10 +1,12 @@
 import type { Features } from '..'
 import { substituteAtApply } from '../apply'
-import { atRule, decl, rule, walk, type AstNode } from '../ast'
+import { atRule, cloneAstNode, decl, rule, walk, type AstNode } from '../ast'
 import type { Candidate, CandidateModifier, NamedUtilityValue } from '../candidate'
 import { substituteFunctions } from '../css-functions'
 import * as CSS from '../css-parser'
 import type { DesignSystem } from '../design-system'
+import * as SelectorParser from '../selector-parser'
+import type { SourceLocation } from '../source-maps/source'
 import { withAlpha } from '../utilities'
 import { DefaultMap } from '../utils/default-map'
 import { escape } from '../utils/escape'
@@ -14,7 +16,6 @@ import { toKeyPath } from '../utils/to-key-path'
 import { compoundsForSelectors, IS_VALID_VARIANT_NAME, substituteAtSlot } from '../variants'
 import type { ResolvedConfig, UserConfig } from './config/types'
 import { createThemeFn } from './plugin-functions'
-import * as SelectorParser from './selector-parser'
 
 export type Config = UserConfig
 export type PluginFn = (api: PluginAPI) => void
@@ -24,6 +25,7 @@ export type PluginWithConfig = {
 
   /** @internal */
   reference?: boolean
+  src?: SourceLocation | undefined
 }
 export type PluginWithOptions<T> = {
   (options?: T): PluginWithConfig
@@ -93,26 +95,48 @@ export function buildPluginApi({
   resolvedConfig,
   featuresRef,
   referenceMode,
+  src,
 }: {
   designSystem: DesignSystem
   ast: AstNode[]
   resolvedConfig: ResolvedConfig
   featuresRef: { current: Features }
   referenceMode: boolean
+  src: SourceLocation | undefined
 }): PluginAPI {
   let api: PluginAPI = {
     addBase(css) {
       if (referenceMode) return
       let baseNodes = objectToAst(css)
       featuresRef.current |= substituteFunctions(baseNodes, designSystem)
-      ast.push(atRule('@layer', 'base', baseNodes))
+      let rule = atRule('@layer', 'base', baseNodes)
+      walk([rule], (node) => {
+        node.src = src
+      })
+      ast.push(rule)
     },
 
     addVariant(name, variant) {
       if (!IS_VALID_VARIANT_NAME.test(name)) {
         throw new Error(
-          `\`addVariant('${name}')\` defines an invalid variant name. Variants should only contain alphanumeric, dashes or underscore characters.`,
+          `\`addVariant('${name}')\` defines an invalid variant name. Variants should only contain alphanumeric, dashes, or underscore characters and start with a lowercase letter or number.`,
         )
+      }
+
+      // Ignore variants emitting v3 `:merge(…)` rules. In v4, the `group-*` and `peer-*` variants
+      // compound automatically.
+      if (typeof variant === 'string') {
+        if (variant.includes(':merge(')) return
+      } else if (Array.isArray(variant)) {
+        if (variant.some((v) => v.includes(':merge('))) return
+      } else if (typeof variant === 'object') {
+        function keyIncludes(object: Record<string, any>, search: string): boolean {
+          return Object.entries(object).some(
+            ([key, value]) =>
+              key.includes(search) || (typeof value === 'object' && keyIncludes(value, search)),
+          )
+        }
+        if (keyIncludes(variant, ':merge(')) return
       }
 
       // Single selector or multiple parallel selectors
@@ -130,7 +154,7 @@ export function buildPluginApi({
 
       // CSS-in-JS object
       else if (typeof variant === 'object') {
-        designSystem.variants.fromAst(name, objectToAst(variant))
+        designSystem.variants.fromAst(name, objectToAst(variant), designSystem)
       }
     },
     matchVariant(name, fn, options) {
@@ -142,6 +166,17 @@ export function buildPluginApi({
         let resolved = fn(value, { modifier: modifier?.value ?? null })
         return parseVariantValue(resolved, nodes)
       }
+
+      try {
+        // Sample variant value and ignore variants emitting v3 `:merge` rules. In
+        // v4, the `group-*` and `peer-*` variants compound automatically.
+        let sample = fn('a', { modifier: null })
+        if (typeof sample === 'string' && sample.includes(':merge(')) {
+          return
+        } else if (Array.isArray(sample) && sample.some((r) => r.includes(':merge('))) {
+          return
+        }
+      } catch {}
 
       let defaultOptionKeys = Object.keys(options?.values ?? {})
       designSystem.variants.group(
@@ -168,10 +203,12 @@ export function buildPluginApi({
             } else if (variant.value.kind === 'named' && options?.values) {
               let defaultValue = options.values[variant.value.value]
               if (typeof defaultValue !== 'string') {
-                return
+                return null
               }
 
               ruleNodes.nodes = resolveVariantValue(defaultValue, variant.modifier, ruleNodes.nodes)
+            } else {
+              return null
             }
           })
         },
@@ -210,6 +247,10 @@ export function buildPluginApi({
           return aValue < zValue ? -1 : 1
         },
       )
+
+      designSystem.variants.suggest(name, () =>
+        Object.keys(options?.values ?? {}).filter((v) => v !== 'DEFAULT'),
+      )
     },
 
     addUtilities(utilities) {
@@ -228,7 +269,11 @@ export function buildPluginApi({
       for (let [name, css] of entries) {
         if (name.startsWith('@keyframes ')) {
           if (!referenceMode) {
-            ast.push(rule(name, objectToAst(css)))
+            let keyframes = rule(name, objectToAst(css))
+            walk([keyframes], (node) => {
+              node.src = src
+            })
+            ast.push(keyframes)
           }
           continue
         }
@@ -284,7 +329,7 @@ export function buildPluginApi({
         }
 
         designSystem.utilities.static(className, (candidate) => {
-          let clonedAst = structuredClone(ast)
+          let clonedAst = ast.map(cloneAstNode)
           replaceNestedClassNameReferences(clonedAst, className, candidate.raw)
           featuresRef.current |= substituteAtApply(clonedAst, designSystem)
           return clonedAst
@@ -427,6 +472,10 @@ export function buildPluginApi({
           // work even with legacy configs and plugins
           valueKeys.delete('__BARE_VALUE__')
 
+          // The `__CSS_VALUES__` key is a special key used by the theme function
+          // to transport `@theme` metadata about values from CSS
+          valueKeys.delete('__CSS_VALUES__')
+
           // The `DEFAULT` key is represented as `null` in the utility API
           if (valueKeys.has('DEFAULT')) {
             valueKeys.delete('DEFAULT')
@@ -501,6 +550,13 @@ export function objectToAst(rules: CssInJs | CssInJs[]): AstNode[] {
   let entries = rules.flatMap((rule) => Object.entries(rule))
 
   for (let [name, value] of entries) {
+    if (value === null || value === undefined) continue
+
+    // @ts-expect-error
+    // We do not want `false` present in the types but still need to discard these nodes for
+    // compatibility purposes
+    if (value === false) continue
+
     if (typeof value !== 'object') {
       if (!name.startsWith('--')) {
         if (value === '@slot') {
@@ -522,7 +578,7 @@ export function objectToAst(rules: CssInJs | CssInJs[]): AstNode[] {
           ast.push(rule(name, objectToAst(item)))
         }
       }
-    } else if (value !== null) {
+    } else {
       ast.push(rule(name, objectToAst(value)))
     }
   }

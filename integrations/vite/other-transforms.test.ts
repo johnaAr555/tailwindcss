@@ -13,8 +13,8 @@ function createSetup(transformer: 'postcss' | 'lightningcss') {
             "tailwindcss": "workspace:^"
           },
           "devDependencies": {
-            ${transformer === 'lightningcss' ? `"lightningcss": "^1.26.0",` : ''}
-            "vite": "^6"
+            ${transformer === 'lightningcss' ? `"lightningcss": "^1",` : ''}
+            "vite": "^7"
           }
         }
       `,

@@ -1,6 +1,8 @@
 import { __unstable__loadDesignSystem } from '@tailwindcss/node'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
+import * as versions from '../../utils/version'
 import { migrateLegacyClasses } from './migrate-legacy-classes'
+vi.spyOn(versions, 'isMajor').mockReturnValue(true)
 
 test.each([
   ['shadow', 'shadow-sm'],
@@ -25,6 +27,8 @@ test.each([
 
   ['ring', 'ring-3'],
 
+  ['outline', 'outline-solid'],
+
   ['blur!', 'blur-sm!'],
   ['hover:blur', 'hover:blur-sm'],
   ['hover:blur!', 'hover:blur-sm!'],
@@ -38,39 +42,4 @@ test.each([
   })
 
   expect(await migrateLegacyClasses(designSystem, {}, candidate)).toEqual(result)
-})
-
-test('does not replace classes in invalid positions', async () => {
-  let designSystem = await __unstable__loadDesignSystem('@import "tailwindcss";', {
-    base: __dirname,
-  })
-
-  async function shouldNotReplace(example: string, candidate = 'shadow') {
-    expect(
-      await migrateLegacyClasses(designSystem, {}, candidate, {
-        contents: example,
-        start: example.indexOf(candidate),
-        end: example.indexOf(candidate) + candidate.length,
-      }),
-    ).toEqual(candidate)
-  }
-
-  await shouldNotReplace(`let notShadow = shadow    \n`)
-  await shouldNotReplace(`{ "foo": shadow.something + ""}\n`)
-  await shouldNotReplace(`<div v-if="something && shadow"></div>\n`)
-  await shouldNotReplace(`<div v-else-if="something && shadow"></div>\n`)
-  await shouldNotReplace(`<div v-show="something && shadow"></div>\n`)
-  await shouldNotReplace(`<div v-if="shadow || shadow"></div>\n`)
-  await shouldNotReplace(`<div v-else-if="shadow || shadow"></div>\n`)
-  await shouldNotReplace(`<div v-show="shadow || shadow"></div>\n`)
-  await shouldNotReplace(`<div v-if="shadow"></div>\n`)
-  await shouldNotReplace(`<div v-else-if="shadow"></div>\n`)
-  await shouldNotReplace(`<div v-show="shadow"></div>\n`)
-  await shouldNotReplace(`<div x-if="shadow"></div>\n`)
-  await shouldNotReplace(`<div style={{filter: 'drop-shadow(30px 10px 4px #4444dd)'}}/>\n`)
-
-  // Next.js Image placeholder cases
-  await shouldNotReplace(`<Image placeholder="blur" src="/image.jpg" />`, 'blur')
-  await shouldNotReplace(`<Image placeholder={'blur'} src="/image.jpg" />`, 'blur')
-  await shouldNotReplace(`<Image placeholder={blur} src="/image.jpg" />`, 'blur')
 })

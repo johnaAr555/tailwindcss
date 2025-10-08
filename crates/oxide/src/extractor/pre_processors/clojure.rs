@@ -5,6 +5,23 @@ use bstr::ByteSlice;
 #[derive(Debug, Default)]
 pub struct Clojure;
 
+/// This is meant to be a rough estimate of a valid ClojureScript keyword
+///
+/// This can be approximated by the following regex:
+/// /::?[a-zA-Z0-9!#$%&*+./:<=>?_|-]+/
+///
+/// However, keywords are intended to be detected as utilities. Since the set
+/// of valid characters in a utility (outside of arbitrary values) is smaller,
+/// along with the fact that neither `[]` nor `()` are allowed in keywords we
+/// can simplify this list quite a bit.
+#[inline]
+fn is_keyword_character(byte: u8) -> bool {
+    (matches!(
+        byte,
+        b'!' | b'#' | b'%' | b'*' | b'+' | b'-' | b'.' | b'/' | b':' | b'_'
+    ) | byte.is_ascii_alphanumeric())
+}
+
 impl PreProcessor for Clojure {
     fn process(&self, content: &[u8]) -> Vec<u8> {
         let content = content
@@ -18,6 +35,7 @@ impl PreProcessor for Clojure {
             match cursor.curr {
                 // Consume strings as-is
                 b'"' => {
+                    result[cursor.pos] = b' ';
                     cursor.advance();
 
                     while cursor.pos < len {
@@ -26,7 +44,10 @@ impl PreProcessor for Clojure {
                             b'\\' => cursor.advance_twice(),
 
                             // End of the string
-                            b'"' => break,
+                            b'"' => {
+                                result[cursor.pos] = b' ';
+                                break;
+                            }
 
                             // Everything else is valid
                             _ => cursor.advance(),
@@ -34,20 +55,140 @@ impl PreProcessor for Clojure {
                     }
                 }
 
-                // Consume comments as-is until the end of the line.
+                // Discard line comments until the end of the line.
                 // Comments start with `;;`
                 b';' if matches!(cursor.next, b';') => {
                     while cursor.pos < len && cursor.curr != b'\n' {
+                        result[cursor.pos] = b' ';
                         cursor.advance();
                     }
                 }
 
-                b':' | b'.' => {
+                // Consume keyword until a terminating character is reached.
+                b':' => {
                     result[cursor.pos] = b' ';
+                    cursor.advance();
+
+                    while cursor.pos < len {
+                        match cursor.curr {
+                            // A `.` surrounded by digits is a decimal number, so we don't want to replace it.
+                            //
+                            // E.g.:
+                            // ```
+                            // gap-1.5
+                            //      ^
+                            // ```
+                            b'.' if cursor.prev.is_ascii_digit()
+                                && cursor.next.is_ascii_digit() =>
+                            {
+                                // Keep the `.` as-is
+                            }
+                            // A `.` not surrounded by digits denotes the start of a new class name in a
+                            // dot-delimited keyword.
+                            //
+                            // E.g.:
+                            // ```
+                            // flex.gap-1.5
+                            //     ^
+                            // ```
+                            b'.' => {
+                                result[cursor.pos] = b' ';
+                            }
+                            // End of keyword.
+                            _ if !is_keyword_character(cursor.curr) => {
+                                result[cursor.pos] = b' ';
+                                break;
+                            }
+
+                            // Consume everything else.
+                            _ => {}
+                        };
+
+                        cursor.advance();
+                    }
                 }
 
-                // Consume everything else
-                _ => {}
+                // Handle quote with a list, e.g.: `'(…)`
+                // and with a vector, e.g.: `'[…]`
+                b'\'' if matches!(cursor.next, b'[' | b'(') => {
+                    result[cursor.pos] = b' ';
+                    cursor.advance();
+                    result[cursor.pos] = b' ';
+                    let end = match cursor.curr {
+                        b'[' => b']',
+                        b'(' => b')',
+                        _ => unreachable!(),
+                    };
+
+                    // Consume until the closing `]`
+                    while cursor.pos < len {
+                        match cursor.curr {
+                            x if x == end => {
+                                result[cursor.pos] = b' ';
+                                break;
+                            }
+
+                            // Consume strings as-is
+                            b'"' => {
+                                result[cursor.pos] = b' ';
+                                cursor.advance();
+
+                                while cursor.pos < len {
+                                    match cursor.curr {
+                                        // Escaped character, skip ahead to the next character
+                                        b'\\' => cursor.advance_twice(),
+
+                                        // End of the string
+                                        b'"' => {
+                                            result[cursor.pos] = b' ';
+                                            break;
+                                        }
+
+                                        // Everything else is valid
+                                        _ => cursor.advance(),
+                                    };
+                                }
+                            }
+                            _ => {}
+                        };
+
+                        cursor.advance();
+                    }
+                }
+
+                // Handle quote with a keyword, e.g.: `'bg-white`
+                b'\'' if !cursor.next.is_ascii_whitespace() => {
+                    result[cursor.pos] = b' ';
+                    cursor.advance();
+
+                    while cursor.pos < len {
+                        match cursor.curr {
+                            // End of keyword.
+                            _ if !is_keyword_character(cursor.curr) => {
+                                result[cursor.pos] = b' ';
+                                break;
+                            }
+
+                            // Consume everything else.
+                            _ => {}
+                        };
+
+                        cursor.advance();
+                    }
+                }
+
+                // Aggressively discard everything else, reducing false positives and preventing
+                // characters surrounding keywords from producing false negatives.
+                // E.g.:
+                // ```
+                // (when condition :bg-white)
+                //                          ^
+                // ```
+                // A ')' is never a valid part of a keyword, but will nonetheless prevent 'bg-white'
+                // from being extracted if not discarded.
+                _ => {
+                    result[cursor.pos] = b' ';
+                }
             };
 
             cursor.advance();
@@ -68,19 +209,23 @@ mod tests {
             (":div.flex-1.flex-2", " div flex-1 flex-2"),
             (
                 ":.flex-3.flex-4 ;defaults to div",
-                "  flex-3 flex-4 ;defaults to div",
+                "  flex-3 flex-4                 ",
             ),
-            ("{:class :flex-5.flex-6", "{        flex-5 flex-6"),
-            (r#"{:class "flex-7 flex-8"}"#, r#"{       "flex-7 flex-8"}"#),
+            ("{:class :flex-5.flex-6", "         flex-5 flex-6"),
+            (r#"{:class "flex-7 flex-8"}"#, r#"         flex-7 flex-8  "#),
             (
                 r#"{:class  ["flex-9" :flex-10]}"#,
-                r#"{        ["flex-9"  flex-10]}"#,
+                r#"           flex-9   flex-10  "#,
             ),
             (
                 r#"(dom/div {:class "flex-11 flex-12"})"#,
-                r#"(dom/div {       "flex-11 flex-12"})"#,
+                r#"                  flex-11 flex-12   "#,
             ),
-            ("(dom/div :.flex-13.flex-14", "(dom/div   flex-13 flex-14"),
+            ("(dom/div :.flex-13.flex-14", "           flex-13 flex-14"),
+            (
+                r#"[:div#hello.bg-white.pr-1.5 {:class ["grid grid-cols-[auto,1fr] grid-rows-2"]}]"#,
+                r#"  div#hello bg-white pr-1.5           grid grid-cols-[auto,1fr] grid-rows-2    "#,
+            ),
         ] {
             Clojure::test(input, expected);
         }
@@ -155,5 +300,137 @@ mod tests {
         "#;
 
         Clojure::test_extract_contains(input, vec!["hover:flex", "px-1.5"]);
+    }
+
+    // https://github.com/tailwindlabs/tailwindcss/issues/17760
+    #[test]
+    fn test_extraction_of_classes_with_dots() {
+        let input = r#"
+            ($ :div {:class [:flex :gap-1.5 :p-1]} …)
+        "#;
+
+        Clojure::test_extract_contains(input, vec!["flex", "gap-1.5", "p-1"]);
+    }
+
+    // https://github.com/tailwindlabs/tailwindcss/issues/18336
+    #[test]
+    fn test_extraction_of_pseudoclasses_from_keywords() {
+        let input = r#"
+            ($ :div {:class [:flex :first:lg:pr-6 :first:2xl:pl-6 :group-hover/2:2xs:pt-6]} …)
+
+            :.hover:bg-white
+
+            [:div#hello.bg-white.pr-1.5]
+        "#;
+
+        Clojure::test_extract_contains(
+            input,
+            vec![
+                "flex",
+                "first:lg:pr-6",
+                "first:2xl:pl-6",
+                "group-hover/2:2xs:pt-6",
+                "hover:bg-white",
+                "bg-white",
+                "pr-1.5",
+            ],
+        );
+    }
+
+    // https://github.com/tailwindlabs/tailwindcss/issues/18344
+    #[test]
+    fn test_noninterference_of_parens_on_keywords() {
+        let input = r#"
+            (get props :y-padding :py-5)
+            ($ :div {:class [:flex.pr-1.5 (if condition :bg-white :bg-black)]})
+        "#;
+
+        Clojure::test_extract_contains(
+            input,
+            vec!["py-5", "flex", "pr-1.5", "bg-white", "bg-black"],
+        );
+    }
+
+    // https://github.com/tailwindlabs/tailwindcss/issues/18882
+    #[test]
+    fn test_extract_from_symbol_list() {
+        let input = r#"
+            [:div {:class '[z-1 z-2
+                            z-3 z-4]}]
+        "#;
+        Clojure::test_extract_contains(input, vec!["z-1", "z-2", "z-3", "z-4"]);
+
+        // https://github.com/tailwindlabs/tailwindcss/pull/18345#issuecomment-3253403847
+        let input = r#"
+            (def hl-class-names '[ring ring-blue-500])
+
+            [:div
+             {:class (cond-> '[input w-full]
+                       textarea? (conj 'textarea)
+                       (seq errors) (concat '[border-red-500 bg-red-100])
+                       highlight? (concat hl-class-names))}]
+        "#;
+        Clojure::test_extract_contains(
+            input,
+            vec![
+                "ring",
+                "ring-blue-500",
+                "input",
+                "w-full",
+                "textarea",
+                "border-red-500",
+                "bg-red-100",
+            ],
+        );
+
+        let input = r#"
+          [:div
+            {:class '[h-100 lg:h-200 max-w-32 mx-auto py-60
+                      flex flex-col justify-end items-center
+                      lg:flex-row lg:justify-between
+                      bg-cover bg-center bg-no-repeat rounded-3xl overflow-hidden
+                      font-semibold text-gray-900]}]
+        "#;
+        Clojure::test_extract_contains(
+            input,
+            vec![
+                "h-100",
+                "lg:h-200",
+                "max-w-32",
+                "mx-auto",
+                "py-60",
+                "flex",
+                "flex-col",
+                "justify-end",
+                "items-center",
+                "lg:flex-row",
+                "lg:justify-between",
+                "bg-cover",
+                "bg-center",
+                "bg-no-repeat",
+                "rounded-3xl",
+                "overflow-hidden",
+                "font-semibold",
+                "text-gray-900",
+            ],
+        );
+
+        // `/` is invalid and requires explicit quoting
+        let input = r#"
+            '[p-32 "text-black/50"]
+        "#;
+        Clojure::test_extract_contains(input, vec!["p-32", "text-black/50"]);
+
+        // `[…]` is invalid and requires explicit quoting
+        let input = r#"
+            (print '[ring ring-blue-500 "bg-[#0088cc]"])
+        "#;
+        Clojure::test_extract_contains(input, vec!["ring", "ring-blue-500", "bg-[#0088cc]"]);
+
+        // `'(…)` looks similar to `[…]` but uses parentheses instead of brackets
+        let input = r#"
+            (print '(ring ring-blue-500 "bg-[#0088cc]"))
+        "#;
+        Clojure::test_extract_contains(input, vec!["ring", "ring-blue-500", "bg-[#0088cc]"]);
     }
 }

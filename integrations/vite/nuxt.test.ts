@@ -7,9 +7,15 @@ const SETUP = {
         "type": "module",
         "dependencies": {
           "@tailwindcss/vite": "workspace:^",
-          "nuxt": "^3.13.1",
+          "nuxt": "3.14.0",
+          "nitropack": "2.11.0",
           "tailwindcss": "workspace:^",
           "vue": "latest"
+        },
+        "pnpm": {
+          "overrides": {
+            "nuxi": "3.28.0"
+          }
         }
       }
     `,

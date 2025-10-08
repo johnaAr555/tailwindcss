@@ -1156,6 +1156,7 @@ test('utilities must be prefixed', async () => {
 
   let compiler = await compile(input, {
     loadModule: async (id, base) => ({
+      path: '',
       base,
       module: { prefix: 'tw' },
     }),
@@ -1164,25 +1165,26 @@ test('utilities must be prefixed', async () => {
   // Prefixed utilities are generated
   expect(compiler.build(['tw:underline', 'tw:hover:line-through', 'tw:custom']))
     .toMatchInlineSnapshot(`
-    ".tw\\:custom {
-      color: red;
-    }
-    .tw\\:underline {
-      text-decoration-line: underline;
-    }
-    .tw\\:hover\\:line-through {
-      &:hover {
-        @media (hover: hover) {
-          text-decoration-line: line-through;
+      ".tw\\:custom {
+        color: red;
+      }
+      .tw\\:underline {
+        text-decoration-line: underline;
+      }
+      .tw\\:hover\\:line-through {
+        &:hover {
+          @media (hover: hover) {
+            text-decoration-line: line-through;
+          }
         }
       }
-    }
-    "
-  `)
+      "
+    `)
 
   // Non-prefixed utilities are ignored
   compiler = await compile(input, {
     loadModule: async (id, base) => ({
+      path: '',
       base,
       module: { prefix: 'tw' },
     }),
@@ -1202,6 +1204,7 @@ test('utilities used in @apply must be prefixed', async () => {
     `,
     {
       loadModule: async (id, base) => ({
+        path: '',
         base,
         module: { prefix: 'tw' },
       }),
@@ -1217,9 +1220,10 @@ test('utilities used in @apply must be prefixed', async () => {
   `)
 
   // Non-prefixed utilities cause an error
-  expect(() =>
+  await expect(
     compile(
       css`
+        @tailwind utilities;
         @config "./config.js";
 
         .my-underline {
@@ -1228,13 +1232,14 @@ test('utilities used in @apply must be prefixed', async () => {
       `,
       {
         loadModule: async (id, base) => ({
+          path: '',
           base,
           module: { prefix: 'tw' },
         }),
       },
     ),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `[Error: Cannot apply unknown utility class: underline]`,
+    `[Error: Cannot apply unprefixed utility class \`underline\`. Did you mean \`tw:underline\`?]`,
   )
 })
 
@@ -1258,6 +1263,7 @@ test('Prefixes configured in CSS take precedence over those defined in JS config
     {
       async loadModule(id, base) {
         return {
+          path: '',
           base,
           module: { prefix: 'tw' },
         }
@@ -1282,6 +1288,7 @@ test('a prefix must be letters only', async () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: { prefix: '__' },
           }
@@ -1305,6 +1312,7 @@ test('important: `#app`', async () => {
 
   let compiler = await compile(input, {
     loadModule: async (_, base) => ({
+      path: '',
       base,
       module: { important: '#app' },
     }),
@@ -1342,6 +1350,7 @@ test('important: true', async () => {
 
   let compiler = await compile(input, {
     loadModule: async (_, base) => ({
+      path: '',
       base,
       module: { important: true },
     }),
@@ -1378,6 +1387,7 @@ test('blocklisted candidates are not generated', async () => {
     {
       async loadModule(id, base) {
         return {
+          path: '',
           base,
           module: {
             blocklist: ['bg-white'],
@@ -1405,7 +1415,7 @@ test('blocklisted candidates are not generated', async () => {
 })
 
 test('blocklisted candidates cannot be used with `@apply`', async () => {
-  await expect(() =>
+  await expect(
     compile(
       css`
         @theme reference {
@@ -1421,6 +1431,7 @@ test('blocklisted candidates cannot be used with `@apply`', async () => {
       {
         async loadModule(id, base) {
           return {
+            path: '',
             base,
             module: {
               blocklist: ['bg-white'],
@@ -1430,7 +1441,7 @@ test('blocklisted candidates cannot be used with `@apply`', async () => {
       },
     ),
   ).rejects.toThrowErrorMatchingInlineSnapshot(
-    `[Error: Cannot apply unknown utility class: bg-white]`,
+    `[Error: Cannot apply utility class \`bg-white\` because it has been explicitly disabled: https://tailwindcss.com/docs/detecting-classes-in-source-files#explicitly-excluding-classes]`,
   )
 })
 
@@ -1473,6 +1484,7 @@ test('old theme values are merged with their renamed counterparts in the CSS the
     {
       async loadModule(id, base) {
         return {
+          path: '',
           base,
           module: plugin(function ({ theme }) {
             didCallPluginFn()

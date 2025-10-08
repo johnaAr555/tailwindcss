@@ -130,7 +130,16 @@ export function themeableValues(config: ResolvedConfig['theme']): [string[], unk
     }
 
     if (Array.isArray(value) && value.every((v) => typeof v === 'string')) {
-      toAdd.push([path, value.join(', ')])
+      if (path[0] === 'fontSize') {
+        toAdd.push([path, value[0]])
+
+        if (value.length >= 2) {
+          toAdd.push([[...path, '-line-height'], value[1]])
+        }
+      } else {
+        toAdd.push([path, value.join(', ')])
+      }
+
       return WalkAction.Skip
     }
   })
@@ -144,7 +153,7 @@ export function keyPathToCssProperty(path: string[]) {
   // The legacy container component config should not be included in the Theme
   if (path[0] === 'container') return null
 
-  path = structuredClone(path)
+  path = path.slice()
 
   if (path[0] === 'animation') path[0] = 'animate'
   if (path[0] === 'aspectRatio') path[0] = 'aspect'

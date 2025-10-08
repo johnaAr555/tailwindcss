@@ -30,13 +30,20 @@ test(
                 400: '#f87171',
                 500: 'red',
               },
+              superRed: '#ff0000',
               steel: 'rgb(70 130 180 / <alpha-value>)',
               smoke: 'rgba(245, 245, 245, var(--smoke-alpha, <alpha-value>))',
+            },
+            opacity: {
+              superOpaque: '0.95',
             },
             fontSize: {
               xs: ['0.75rem', { lineHeight: '1rem' }],
               sm: ['0.875rem', { lineHeight: '1.5rem' }],
               base: ['1rem', { lineHeight: '2rem' }],
+              lg: ['1.125rem', '2.5rem'],
+              xl: ['1.5rem', '3rem', 'invalid'],
+              '2xl': ['2rem'],
             },
             width: {
               px: '1px',
@@ -141,9 +148,10 @@ test(
         }
       `,
       'src/index.html': html`
-       <div
+        <div
           class="[letter-spacing:theme(letterSpacing.superWide)] [line-height:theme(lineHeight.superLoose)]"
         ></div>
+        <div class="text-superRed/superOpaque leading-superLoose"></div>
       `,
       'node_modules/my-external-lib/src/template.html': html`
         <div class="text-red-500">
@@ -159,8 +167,9 @@ test(
       "
       --- src/index.html ---
       <div
-         class="[letter-spacing:var(--tracking-super-wide)] [line-height:var(--leading-super-loose)]"
-       ></div>
+        class="[letter-spacing:var(--tracking-super-wide)] [line-height:var(--leading-super-loose)]"
+      ></div>
+      <div class="text-super-red/super-opaque leading-super-loose"></div>
 
       --- src/input.css ---
       @import 'tailwindcss';
@@ -178,8 +187,12 @@ test(
         --color-red-500: #ef4444;
         --color-red-600: #dc2626;
 
+        --color-super-red: #ff0000;
         --color-steel: rgb(70 130 180);
         --color-smoke: rgba(245, 245, 245, var(--smoke-alpha, 1));
+
+        --opacity-*: initial;
+        --opacity-super-opaque: 95%;
 
         --text-*: initial;
         --text-xs: 0.75rem;
@@ -188,6 +201,11 @@ test(
         --text-sm--line-height: 1.5rem;
         --text-base: 1rem;
         --text-base--line-height: 2rem;
+        --text-lg: 1.125rem;
+        --text-lg--line-height: 2.5rem;
+        --text-xl: 1.5rem;
+        --text-xl--line-height: 3rem;
+        --text-2xl: 2rem;
 
         --width-*: initial;
         --width-0: 0%;
@@ -947,6 +965,252 @@ test(
   },
 )
 
+test(
+  'migrate aria theme keys to custom variants',
+  {
+    fs: {
+      'package.json': json`
+        {
+          "dependencies": {
+            "tailwindcss": "^3",
+            "@tailwindcss/upgrade": "workspace:^"
+          }
+        }
+      `,
+      'tailwind.config.ts': ts`
+        export default {
+          content: {
+            relative: true,
+            files: ['./src/**/*.html'],
+          },
+          theme: {
+            extend: {
+              aria: {
+                // Built-in (not really, but visible because of intellisense)
+                busy: 'busy="true"',
+
+                // Automatically handled by bare values
+                foo: 'foo="true"',
+
+                // Quotes are optional in CSS for these kinds of attribute
+                // selectors
+                bar: 'bar=true',
+
+                // Not automatically handled by bare values because names differ
+                baz: 'qux="true"',
+
+                // Completely custom
+                asc: 'sort="ascending"',
+                desc: 'sort="descending"',
+              },
+            },
+          },
+        }
+      `,
+      'src/input.css': css`
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+      `,
+    },
+  },
+  async ({ exec, fs, expect }) => {
+    await exec('npx @tailwindcss/upgrade')
+
+    expect(await fs.dumpFiles('src/*.css')).toMatchInlineSnapshot(`
+      "
+      --- src/input.css ---
+      @import 'tailwindcss';
+
+      @custom-variant aria-baz (&[aria-qux="true"]);
+      @custom-variant aria-asc (&[aria-sort="ascending"]);
+      @custom-variant aria-desc (&[aria-sort="descending"]);
+
+      /*
+        The default border color has changed to \`currentcolor\` in Tailwind CSS v4,
+        so we've added these compatibility styles to make sure everything still
+        looks the same as it did with Tailwind CSS v3.
+
+        If we ever want to remove these styles, we need to add an explicit border
+        color utility to any element that depends on these defaults.
+      */
+      @layer base {
+        *,
+        ::after,
+        ::before,
+        ::backdrop,
+        ::file-selector-button {
+          border-color: var(--color-gray-200, currentcolor);
+        }
+      }
+      "
+    `)
+  },
+)
+
+test(
+  'migrate data theme keys to custom variants',
+  {
+    fs: {
+      'package.json': json`
+        {
+          "dependencies": {
+            "tailwindcss": "^3",
+            "@tailwindcss/upgrade": "workspace:^"
+          }
+        }
+      `,
+      'tailwind.config.ts': ts`
+        export default {
+          content: {
+            relative: true,
+            files: ['./src/**/*.html'],
+          },
+          theme: {
+            extend: {
+              data: {
+                // Automatically handled by bare values
+                foo: 'foo',
+
+                // Not automatically handled by bare values because names differ
+                bar: 'baz',
+
+                // Custom
+                checked: 'ui~="checked"',
+              },
+            },
+          },
+        }
+      `,
+      'src/input.css': css`
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+      `,
+    },
+  },
+  async ({ exec, fs, expect }) => {
+    await exec('npx @tailwindcss/upgrade')
+
+    expect(await fs.dumpFiles('src/*.css')).toMatchInlineSnapshot(`
+      "
+      --- src/input.css ---
+      @import 'tailwindcss';
+
+      @custom-variant data-bar (&[data-baz]);
+      @custom-variant data-checked (&[data-ui~="checked"]);
+
+      /*
+        The default border color has changed to \`currentcolor\` in Tailwind CSS v4,
+        so we've added these compatibility styles to make sure everything still
+        looks the same as it did with Tailwind CSS v3.
+
+        If we ever want to remove these styles, we need to add an explicit border
+        color utility to any element that depends on these defaults.
+      */
+      @layer base {
+        *,
+        ::after,
+        ::before,
+        ::backdrop,
+        ::file-selector-button {
+          border-color: var(--color-gray-200, currentcolor);
+        }
+      }
+      "
+    `)
+  },
+)
+
+test(
+  'migrate supports theme keys to custom variants',
+  {
+    fs: {
+      'package.json': json`
+        {
+          "dependencies": {
+            "tailwindcss": "^3",
+            "@tailwindcss/upgrade": "workspace:^"
+          }
+        }
+      `,
+      'tailwind.config.ts': ts`
+        export default {
+          content: {
+            relative: true,
+            files: ['./src/**/*.html'],
+          },
+          theme: {
+            extend: {
+              supports: {
+                // Automatically handled by bare values (using CSS variable as the value)
+                foo: 'foo: var(--foo)', // parentheses are optional
+                bar: '(bar: var(--bar))',
+
+                // Not automatically handled by bare values because names differ
+                foo: 'bar: var(--foo)', // parentheses are optional
+                bar: '(qux: var(--bar))',
+
+                // Custom
+                grid: 'display: grid',
+              },
+            },
+          },
+        }
+      `,
+      'src/input.css': css`
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+      `,
+    },
+  },
+  async ({ exec, fs, expect }) => {
+    await exec('npx @tailwindcss/upgrade')
+
+    expect(await fs.dumpFiles('src/*.css')).toMatchInlineSnapshot(`
+      "
+      --- src/input.css ---
+      @import 'tailwindcss';
+
+      @custom-variant supports-foo {
+        @supports (bar: var(--foo)) {
+          @slot;
+        }
+      }
+      @custom-variant supports-bar {
+        @supports ((qux: var(--bar))) {
+          @slot;
+        }
+      }
+      @custom-variant supports-grid {
+        @supports (display: grid) {
+          @slot;
+        }
+      }
+
+      /*
+        The default border color has changed to \`currentcolor\` in Tailwind CSS v4,
+        so we've added these compatibility styles to make sure everything still
+        looks the same as it did with Tailwind CSS v3.
+
+        If we ever want to remove these styles, we need to add an explicit border
+        color utility to any element that depends on these defaults.
+      */
+      @layer base {
+        *,
+        ::after,
+        ::before,
+        ::backdrop,
+        ::file-selector-button {
+          border-color: var(--color-gray-200, currentcolor);
+        }
+      }
+      "
+    `)
+  },
+)
+
 describe('border compatibility', () => {
   test(
     'migrate border compatibility',
@@ -1321,12 +1585,12 @@ describe('border compatibility', () => {
         "
         --- src/index.html ---
         <div
-          class="[width:--spacing(2)]
-            [width:--spacing(4.5)]
-            [width:var(--spacing-5_5)]
-            [width:--spacing(13)]
-            [width:var(--spacing-100)]
-            [width:var(--spacing-miami)]"
+          class="w-2
+            w-4.5
+            w-5.5
+            w-13
+            w-100
+            w-miami"
         ></div>
 
         --- src/input.css ---
@@ -1431,12 +1695,12 @@ describe('border compatibility', () => {
         "
         --- src/index.html ---
         <div
-          class="[width:var(--spacing-2)]
-            [width:var(--spacing-4_5)]
-            [width:var(--spacing-5_5)]
-            [width:var(--spacing-13)]
-            [width:var(--spacing-100)]
-            [width:var(--spacing-miami)]"
+          class="w-2
+            w-4.5
+            w-5.5
+            w-13
+            w-100
+            w-miami"
         ></div>
 
         --- src/input.css ---

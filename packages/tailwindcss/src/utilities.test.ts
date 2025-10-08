@@ -7,7 +7,7 @@ const css = String.raw
 test('sr-only', async () => {
   expect(await run(['sr-only'])).toMatchInlineSnapshot(`
     ".sr-only {
-      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
       white-space: nowrap;
       border-width: 0;
       width: 1px;
@@ -24,7 +24,7 @@ test('sr-only', async () => {
 test('not-sr-only', async () => {
   expect(await run(['not-sr-only'])).toMatchInlineSnapshot(`
     ".not-sr-only {
-      clip: auto;
+      clip-path: none;
       white-space: normal;
       width: auto;
       height: auto;
@@ -1054,6 +1054,26 @@ test('z-index', async () => {
       '-z-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --z-index-auto: 42;
+        }
+        @tailwind utilities;
+      `,
+      ['z-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --z-index-auto: 42;
+    }
+
+    .z-auto {
+      z-index: var(--z-index-auto);
+    }"
+  `)
 })
 
 test('order', async () => {
@@ -1114,6 +1134,46 @@ test('order', async () => {
       'order-none/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --order-first: 1;
+        }
+        @tailwind utilities;
+      `,
+      ['order-first'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --order-first: 1;
+    }
+
+    .order-first {
+      order: var(--order-first);
+    }"
+  `)
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --order-last: -1;
+        }
+        @tailwind utilities;
+      `,
+      ['order-last'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --order-last: -1;
+    }
+
+    .order-last {
+      order: var(--order-last);
+    }"
+  `)
 })
 
 test('col', async () => {
@@ -1176,13 +1236,52 @@ test('col', async () => {
       'col-span-[var(--my-variable)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-column-auto: 5;
+        }
+        @tailwind utilities;
+      `,
+      ['col-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-column-auto: 5;
+    }
+
+    .col-auto {
+      grid-column: var(--grid-column-auto);
+    }"
+  `)
 })
 
 test('col-start', async () => {
   expect(
-    await run(['col-start-auto', 'col-start-4', 'col-start-99', 'col-start-[123]', '-col-start-4']),
+    await compileCss(
+      css`
+        @theme {
+          --grid-column-start-custom: 1 column-start;
+        }
+        @tailwind utilities;
+      `,
+      [
+        'col-start-auto',
+        'col-start-4',
+        'col-start-99',
+        'col-start-[123]',
+        '-col-start-4',
+        'col-start-custom',
+      ],
+    ),
   ).toMatchInlineSnapshot(`
-    ".-col-start-4 {
+    ":root, :host {
+      --grid-column-start-custom: 1 column-start;
+    }
+
+    .-col-start-4 {
       grid-column-start: calc(4 * -1);
     }
 
@@ -1200,6 +1299,10 @@ test('col-start', async () => {
 
     .col-start-auto {
       grid-column-start: auto;
+    }
+
+    .col-start-custom {
+      grid-column-start: var(--grid-column-start-custom);
     }"
   `)
   expect(
@@ -1214,31 +1317,68 @@ test('col-start', async () => {
       '-col-start-4/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-column-start-auto: 7;
+        }
+        @tailwind utilities;
+      `,
+      ['col-start-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-column-start-auto: 7;
+    }
+
+    .col-start-auto {
+      grid-column-start: var(--grid-column-start-auto);
+    }"
+  `)
 })
 
 test('col-end', async () => {
-  expect(await run(['col-end-auto', 'col-end-4', 'col-end-99', 'col-end-[123]', '-col-end-4']))
-    .toMatchInlineSnapshot(`
-      ".-col-end-4 {
-        grid-column-end: calc(4 * -1);
-      }
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-column-end-custom: 1 column-end;
+        }
+        @tailwind utilities;
+      `,
+      ['col-end-auto', 'col-end-4', 'col-end-99', 'col-end-[123]', '-col-end-4', 'col-end-custom'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-column-end-custom: 1 column-end;
+    }
 
-      .col-end-4 {
-        grid-column-end: 4;
-      }
+    .-col-end-4 {
+      grid-column-end: calc(4 * -1);
+    }
 
-      .col-end-99 {
-        grid-column-end: 99;
-      }
+    .col-end-4 {
+      grid-column-end: 4;
+    }
 
-      .col-end-\\[123\\] {
-        grid-column-end: 123;
-      }
+    .col-end-99 {
+      grid-column-end: 99;
+    }
 
-      .col-end-auto {
-        grid-column-end: auto;
-      }"
-    `)
+    .col-end-\\[123\\] {
+      grid-column-end: 123;
+    }
+
+    .col-end-auto {
+      grid-column-end: auto;
+    }
+
+    .col-end-custom {
+      grid-column-end: var(--grid-column-end-custom);
+    }"
+  `)
   expect(
     await run([
       'col-end',
@@ -1251,6 +1391,26 @@ test('col-end', async () => {
       '-col-end-4/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-column-end-auto: 3;
+        }
+        @tailwind utilities;
+      `,
+      ['col-end-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-column-end-auto: 3;
+    }
+
+    .col-end-auto {
+      grid-column-end: var(--grid-column-end-auto);
+    }"
+  `)
 })
 
 test('row', async () => {
@@ -1313,32 +1473,75 @@ test('row', async () => {
       'row-span-[var(--my-variable)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-row-auto: 9;
+        }
+        @tailwind utilities;
+      `,
+      ['row-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-row-auto: 9;
+    }
+
+    .row-auto {
+      grid-row: var(--grid-row-auto);
+    }"
+  `)
 })
 
 test('row-start', async () => {
   expect(
-    await run(['row-start-auto', 'row-start-4', 'row-start-99', 'row-start-[123]', '-row-start-4']),
+    await compileCss(
+      css`
+        @theme {
+          --grid-row-start-custom: 1 row-start;
+        }
+        @tailwind utilities;
+      `,
+      [
+        'row-start-auto',
+        'row-start-4',
+        'row-start-99',
+        'row-start-[123]',
+        '-row-start-4',
+        'row-start-custom',
+      ],
+    ),
   ).toMatchInlineSnapshot(`
-      ".-row-start-4 {
-        grid-row-start: calc(4 * -1);
-      }
+    ":root, :host {
+      --grid-row-start-custom: 1 row-start;
+    }
 
-      .row-start-4 {
-        grid-row-start: 4;
-      }
+    .-row-start-4 {
+      grid-row-start: calc(4 * -1);
+    }
 
-      .row-start-99 {
-        grid-row-start: 99;
-      }
+    .row-start-4 {
+      grid-row-start: 4;
+    }
 
-      .row-start-\\[123\\] {
-        grid-row-start: 123;
-      }
+    .row-start-99 {
+      grid-row-start: 99;
+    }
 
-      .row-start-auto {
-        grid-row-start: auto;
-      }"
-    `)
+    .row-start-\\[123\\] {
+      grid-row-start: 123;
+    }
+
+    .row-start-auto {
+      grid-row-start: auto;
+    }
+
+    .row-start-custom {
+      grid-row-start: var(--grid-row-start-custom);
+    }"
+  `)
   expect(
     await run([
       'row-start',
@@ -1351,31 +1554,68 @@ test('row-start', async () => {
       '-row-start-4/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-row-start-auto: 11;
+        }
+        @tailwind utilities;
+      `,
+      ['row-start-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-row-start-auto: 11;
+    }
+
+    .row-start-auto {
+      grid-row-start: var(--grid-row-start-auto);
+    }"
+  `)
 })
 
 test('row-end', async () => {
-  expect(await run(['row-end-auto', 'row-end-4', 'row-end-99', 'row-end-[123]', '-row-end-4']))
-    .toMatchInlineSnapshot(`
-      ".-row-end-4 {
-        grid-row-end: calc(4 * -1);
-      }
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-row-end-custom: 1 row-end;
+        }
+        @tailwind utilities;
+      `,
+      ['row-end-auto', 'row-end-4', 'row-end-99', 'row-end-[123]', '-row-end-4', 'row-end-custom'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-row-end-custom: 1 row-end;
+    }
 
-      .row-end-4 {
-        grid-row-end: 4;
-      }
+    .-row-end-4 {
+      grid-row-end: calc(4 * -1);
+    }
 
-      .row-end-99 {
-        grid-row-end: 99;
-      }
+    .row-end-4 {
+      grid-row-end: 4;
+    }
 
-      .row-end-\\[123\\] {
-        grid-row-end: 123;
-      }
+    .row-end-99 {
+      grid-row-end: 99;
+    }
 
-      .row-end-auto {
-        grid-row-end: auto;
-      }"
-    `)
+    .row-end-\\[123\\] {
+      grid-row-end: 123;
+    }
+
+    .row-end-auto {
+      grid-row-end: auto;
+    }
+
+    .row-end-custom {
+      grid-row-end: var(--grid-row-end-custom);
+    }"
+  `)
   expect(
     await run([
       'row-end',
@@ -1388,6 +1628,26 @@ test('row-end', async () => {
       '-row-end-4/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-row-end-auto: 13;
+        }
+        @tailwind utilities;
+      `,
+      ['row-end-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-row-end-auto: 13;
+    }
+
+    .row-end-auto {
+      grid-row-end: var(--grid-row-end-auto);
+    }"
+  `)
 })
 
 test('float', async () => {
@@ -2342,6 +2602,29 @@ test('line-clamp', async () => {
       'line-clamp-none/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --line-clamp-none: 0;
+        }
+        @tailwind utilities;
+      `,
+      ['line-clamp-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --line-clamp-none: 0;
+    }
+
+    .line-clamp-none {
+      -webkit-line-clamp: var(--line-clamp-none);
+      -webkit-box-orient: vertical;
+      display: -webkit-box;
+      overflow: hidden;
+    }"
+  `)
 })
 
 test('display', async () => {
@@ -2917,6 +3200,7 @@ test('height', async () => {
         'h-lvh',
         'h-dvh',
         'h-min',
+        'h-lh',
         'h-max',
         'h-fit',
         'h-4',
@@ -2957,6 +3241,10 @@ test('height', async () => {
       height: 100%;
     }
 
+    .h-lh {
+      height: 1lh;
+    }
+
     .h-lvh {
       height: 100lvh;
     }
@@ -2993,6 +3281,7 @@ test('height', async () => {
       'h-svh/foo',
       'h-lvh/foo',
       'h-dvh/foo',
+      'h-lh/foo',
       'h-min/foo',
       'h-max/foo',
       'h-fit/foo',
@@ -3020,6 +3309,7 @@ test('min-height', async () => {
         'min-h-lvh',
         'min-h-dvh',
         'min-h-min',
+        'min-h-lh',
         'min-h-max',
         'min-h-fit',
         'min-h-4',
@@ -3055,6 +3345,10 @@ test('min-height', async () => {
       min-height: 100%;
     }
 
+    .min-h-lh {
+      min-height: 1lh;
+    }
+
     .min-h-lvh {
       min-height: 100lvh;
     }
@@ -3086,6 +3380,7 @@ test('min-height', async () => {
       'min-h-svh/foo',
       'min-h-lvh/foo',
       'min-h-dvh/foo',
+      'min-h-lh/foo',
       'min-h-min/foo',
       'min-h-max/foo',
       'min-h-fit/foo',
@@ -3111,6 +3406,7 @@ test('max-height', async () => {
         'max-h-svh',
         'max-h-lvh',
         'max-h-dvh',
+        'max-h-lh',
         'max-h-min',
         'max-h-max',
         'max-h-fit',
@@ -3141,6 +3437,10 @@ test('max-height', async () => {
 
     .max-h-full {
       max-height: 100%;
+    }
+
+    .max-h-lh {
+      max-height: 1lh;
     }
 
     .max-h-lvh {
@@ -3179,6 +3479,7 @@ test('max-height', async () => {
       'max-h-svh/foo',
       'max-h-lvh/foo',
       'max-h-dvh/foo',
+      'max-h-lh/foo',
       'max-h-min/foo',
       'max-h-max/foo',
       'max-h-fit/foo',
@@ -3882,6 +4183,26 @@ test('origin', async () => {
       'origin-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --transform-origin-top: 10px 20px;
+        }
+        @tailwind utilities;
+      `,
+      ['origin-top'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --transform-origin-top: 10px 20px;
+    }
+
+    .origin-top {
+      transform-origin: var(--transform-origin-top);
+    }"
+  `)
 })
 
 test('perspective-origin', async () => {
@@ -3961,6 +4282,27 @@ test('perspective-origin', async () => {
       'perspective-origin-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --perspective-origin-top: 10px 20px;
+        }
+        @tailwind utilities;
+      `,
+      ['perspective-origin-top'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --perspective-origin-top: 10px 20px;
+    }
+
+    .perspective-origin-top {
+      perspective-origin: var(--perspective-origin-top);
+      perspective: var(--perspective-origin-top);
+    }"
+  `)
 })
 
 test('translate', async () => {
@@ -4435,10 +4777,31 @@ test('translate-3d', async () => {
 })
 
 test('rotate', async () => {
-  expect(await run(['rotate-45', '-rotate-45', 'rotate-[123deg]', 'rotate-[0.3_0.7_1_45deg]']))
-    .toMatchInlineSnapshot(`
-    ".-rotate-45 {
+  expect(
+    await run([
+      'rotate-45',
+      '-rotate-45',
+      'rotate-[123deg]',
+      'rotate-[0.3_0.7_1_45deg]',
+      'rotate-(--var)',
+      '-rotate-[123deg]',
+      '-rotate-(--var)',
+    ]),
+  ).toMatchInlineSnapshot(`
+    ".-rotate-\\(--var\\) {
+      rotate: calc(var(--var) * -1);
+    }
+
+    .-rotate-45 {
       rotate: -45deg;
+    }
+
+    .-rotate-\\[123deg\\] {
+      rotate: -123deg;
+    }
+
+    .rotate-\\(--var\\) {
+      rotate: var(--var);
     }
 
     .rotate-45 {
@@ -4468,62 +4831,75 @@ test('rotate', async () => {
 })
 
 test('rotate-x', async () => {
-  expect(await run(['rotate-x-45', '-rotate-x-45', 'rotate-x-[123deg]'])).toMatchInlineSnapshot(`
+  expect(
+    await run([
+      'rotate-x-45',
+      '-rotate-x-45',
+      'rotate-x-[123deg]',
+      'rotate-x-(--var)',
+      '-rotate-x-(--var)',
+    ]),
+  ).toMatchInlineSnapshot(`
     "@layer properties {
       @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
         *, :before, :after, ::backdrop {
-          --tw-rotate-x: rotateX(0);
-          --tw-rotate-y: rotateY(0);
-          --tw-rotate-z: rotateZ(0);
-          --tw-skew-x: skewX(0);
-          --tw-skew-y: skewY(0);
+          --tw-rotate-x: initial;
+          --tw-rotate-y: initial;
+          --tw-rotate-z: initial;
+          --tw-skew-x: initial;
+          --tw-skew-y: initial;
         }
       }
     }
 
+    .-rotate-x-\\(--var\\) {
+      --tw-rotate-x: rotateX(calc(var(--var) * -1));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
+
     .-rotate-x-45 {
       --tw-rotate-x: rotateX(calc(45deg * -1));
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
+
+    .rotate-x-\\(--var\\) {
+      --tw-rotate-x: rotateX(var(--var));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .rotate-x-45 {
       --tw-rotate-x: rotateX(45deg);
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .rotate-x-\\[123deg\\] {
       --tw-rotate-x: rotateX(123deg);
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     @property --tw-rotate-x {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateX(0);
+      inherits: false
     }
 
     @property --tw-rotate-y {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateY(0);
+      inherits: false
     }
 
     @property --tw-rotate-z {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateZ(0);
+      inherits: false
     }
 
     @property --tw-skew-x {
       syntax: "*";
-      inherits: false;
-      initial-value: skewX(0);
+      inherits: false
     }
 
     @property --tw-skew-y {
       syntax: "*";
-      inherits: false;
-      initial-value: skewY(0);
+      inherits: false
     }"
   `)
   expect(
@@ -4540,70 +4916,83 @@ test('rotate-x', async () => {
 })
 
 test('rotate-y', async () => {
-  expect(await run(['rotate-y-45', '-rotate-y-45', 'rotate-y-[123deg]', '-rotate-y-[123deg]']))
-    .toMatchInlineSnapshot(`
-      "@layer properties {
-        @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
-          *, :before, :after, ::backdrop {
-            --tw-rotate-x: rotateX(0);
-            --tw-rotate-y: rotateY(0);
-            --tw-rotate-z: rotateZ(0);
-            --tw-skew-x: skewX(0);
-            --tw-skew-y: skewY(0);
-          }
+  expect(
+    await run([
+      'rotate-y-45',
+      'rotate-y-[123deg]',
+      'rotate-y-(--var)',
+      '-rotate-y-45',
+      '-rotate-y-[123deg]',
+      '-rotate-y-(--var)',
+    ]),
+  ).toMatchInlineSnapshot(`
+    "@layer properties {
+      @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+        *, :before, :after, ::backdrop {
+          --tw-rotate-x: initial;
+          --tw-rotate-y: initial;
+          --tw-rotate-z: initial;
+          --tw-skew-x: initial;
+          --tw-skew-y: initial;
         }
       }
+    }
 
-      .-rotate-y-45 {
-        --tw-rotate-y: rotateY(calc(45deg * -1));
-        transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
-      }
+    .-rotate-y-\\(--var\\) {
+      --tw-rotate-y: rotateY(calc(var(--var) * -1));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      .-rotate-y-\\[123deg\\] {
-        --tw-rotate-y: rotateY(calc(123deg * -1));
-        transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
-      }
+    .-rotate-y-45 {
+      --tw-rotate-y: rotateY(calc(45deg * -1));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      .rotate-y-45 {
-        --tw-rotate-y: rotateY(45deg);
-        transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
-      }
+    .-rotate-y-\\[123deg\\] {
+      --tw-rotate-y: rotateY(calc(123deg * -1));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      .rotate-y-\\[123deg\\] {
-        --tw-rotate-y: rotateY(123deg);
-        transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
-      }
+    .rotate-y-\\(--var\\) {
+      --tw-rotate-y: rotateY(var(--var));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      @property --tw-rotate-x {
-        syntax: "*";
-        inherits: false;
-        initial-value: rotateX(0);
-      }
+    .rotate-y-45 {
+      --tw-rotate-y: rotateY(45deg);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      @property --tw-rotate-y {
-        syntax: "*";
-        inherits: false;
-        initial-value: rotateY(0);
-      }
+    .rotate-y-\\[123deg\\] {
+      --tw-rotate-y: rotateY(123deg);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      @property --tw-rotate-z {
-        syntax: "*";
-        inherits: false;
-        initial-value: rotateZ(0);
-      }
+    @property --tw-rotate-x {
+      syntax: "*";
+      inherits: false
+    }
 
-      @property --tw-skew-x {
-        syntax: "*";
-        inherits: false;
-        initial-value: skewX(0);
-      }
+    @property --tw-rotate-y {
+      syntax: "*";
+      inherits: false
+    }
 
-      @property --tw-skew-y {
-        syntax: "*";
-        inherits: false;
-        initial-value: skewY(0);
-      }"
-    `)
+    @property --tw-rotate-z {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-skew-x {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-skew-y {
+      syntax: "*";
+      inherits: false
+    }"
+  `)
   expect(
     await run([
       'rotate-y',
@@ -4618,70 +5007,83 @@ test('rotate-y', async () => {
 })
 
 test('rotate-z', async () => {
-  expect(await run(['rotate-z-45', '-rotate-z-45', 'rotate-z-[123deg]', '-rotate-z-[123deg]']))
-    .toMatchInlineSnapshot(`
-      "@layer properties {
-        @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
-          *, :before, :after, ::backdrop {
-            --tw-rotate-x: rotateX(0);
-            --tw-rotate-y: rotateY(0);
-            --tw-rotate-z: rotateZ(0);
-            --tw-skew-x: skewX(0);
-            --tw-skew-y: skewY(0);
-          }
+  expect(
+    await run([
+      'rotate-z-45',
+      'rotate-z-[123deg]',
+      'rotate-z-(--var)',
+      '-rotate-z-45',
+      '-rotate-z-[123deg]',
+      '-rotate-z-(--var)',
+    ]),
+  ).toMatchInlineSnapshot(`
+    "@layer properties {
+      @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+        *, :before, :after, ::backdrop {
+          --tw-rotate-x: initial;
+          --tw-rotate-y: initial;
+          --tw-rotate-z: initial;
+          --tw-skew-x: initial;
+          --tw-skew-y: initial;
         }
       }
+    }
 
-      .-rotate-z-45 {
-        --tw-rotate-z: rotateZ(calc(45deg * -1));
-        transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
-      }
+    .-rotate-z-\\(--var\\) {
+      --tw-rotate-z: rotateZ(calc(var(--var) * -1));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      .-rotate-z-\\[123deg\\] {
-        --tw-rotate-z: rotateZ(calc(123deg * -1));
-        transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
-      }
+    .-rotate-z-45 {
+      --tw-rotate-z: rotateZ(calc(45deg * -1));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      .rotate-z-45 {
-        --tw-rotate-z: rotateZ(45deg);
-        transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
-      }
+    .-rotate-z-\\[123deg\\] {
+      --tw-rotate-z: rotateZ(calc(123deg * -1));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      .rotate-z-\\[123deg\\] {
-        --tw-rotate-z: rotateZ(123deg);
-        transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
-      }
+    .rotate-z-\\(--var\\) {
+      --tw-rotate-z: rotateZ(var(--var));
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      @property --tw-rotate-x {
-        syntax: "*";
-        inherits: false;
-        initial-value: rotateX(0);
-      }
+    .rotate-z-45 {
+      --tw-rotate-z: rotateZ(45deg);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      @property --tw-rotate-y {
-        syntax: "*";
-        inherits: false;
-        initial-value: rotateY(0);
-      }
+    .rotate-z-\\[123deg\\] {
+      --tw-rotate-z: rotateZ(123deg);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
+    }
 
-      @property --tw-rotate-z {
-        syntax: "*";
-        inherits: false;
-        initial-value: rotateZ(0);
-      }
+    @property --tw-rotate-x {
+      syntax: "*";
+      inherits: false
+    }
 
-      @property --tw-skew-x {
-        syntax: "*";
-        inherits: false;
-        initial-value: skewX(0);
-      }
+    @property --tw-rotate-y {
+      syntax: "*";
+      inherits: false
+    }
 
-      @property --tw-skew-y {
-        syntax: "*";
-        inherits: false;
-        initial-value: skewY(0);
-      }"
-    `)
+    @property --tw-rotate-z {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-skew-x {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-skew-y {
+      syntax: "*";
+      inherits: false
+    }"
+  `)
   expect(
     await run([
       'rotate-z',
@@ -4700,11 +5102,11 @@ test('skew', async () => {
     "@layer properties {
       @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
         *, :before, :after, ::backdrop {
-          --tw-rotate-x: rotateX(0);
-          --tw-rotate-y: rotateY(0);
-          --tw-rotate-z: rotateZ(0);
-          --tw-skew-x: skewX(0);
-          --tw-skew-y: skewY(0);
+          --tw-rotate-x: initial;
+          --tw-rotate-y: initial;
+          --tw-rotate-z: initial;
+          --tw-skew-x: initial;
+          --tw-skew-y: initial;
         }
       }
     }
@@ -4712,49 +5114,44 @@ test('skew', async () => {
     .-skew-6 {
       --tw-skew-x: skewX(calc(6deg * -1));
       --tw-skew-y: skewY(calc(6deg * -1));
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .skew-6 {
       --tw-skew-x: skewX(6deg);
       --tw-skew-y: skewY(6deg);
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .skew-\\[123deg\\] {
       --tw-skew-x: skewX(123deg);
       --tw-skew-y: skewY(123deg);
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     @property --tw-rotate-x {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateX(0);
+      inherits: false
     }
 
     @property --tw-rotate-y {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateY(0);
+      inherits: false
     }
 
     @property --tw-rotate-z {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateZ(0);
+      inherits: false
     }
 
     @property --tw-skew-x {
       syntax: "*";
-      inherits: false;
-      initial-value: skewX(0);
+      inherits: false
     }
 
     @property --tw-skew-y {
       syntax: "*";
-      inherits: false;
-      initial-value: skewY(0);
+      inherits: false
     }"
   `)
   expect(
@@ -4774,58 +5171,53 @@ test('skew-x', async () => {
     "@layer properties {
       @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
         *, :before, :after, ::backdrop {
-          --tw-rotate-x: rotateX(0);
-          --tw-rotate-y: rotateY(0);
-          --tw-rotate-z: rotateZ(0);
-          --tw-skew-x: skewX(0);
-          --tw-skew-y: skewY(0);
+          --tw-rotate-x: initial;
+          --tw-rotate-y: initial;
+          --tw-rotate-z: initial;
+          --tw-skew-x: initial;
+          --tw-skew-y: initial;
         }
       }
     }
 
     .-skew-x-6 {
       --tw-skew-x: skewX(calc(6deg * -1));
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .skew-x-6 {
       --tw-skew-x: skewX(6deg);
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .skew-x-\\[123deg\\] {
       --tw-skew-x: skewX(123deg);
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     @property --tw-rotate-x {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateX(0);
+      inherits: false
     }
 
     @property --tw-rotate-y {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateY(0);
+      inherits: false
     }
 
     @property --tw-rotate-z {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateZ(0);
+      inherits: false
     }
 
     @property --tw-skew-x {
       syntax: "*";
-      inherits: false;
-      initial-value: skewX(0);
+      inherits: false
     }
 
     @property --tw-skew-y {
       syntax: "*";
-      inherits: false;
-      initial-value: skewY(0);
+      inherits: false
     }"
   `)
   expect(
@@ -4845,58 +5237,53 @@ test('skew-y', async () => {
     "@layer properties {
       @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
         *, :before, :after, ::backdrop {
-          --tw-rotate-x: rotateX(0);
-          --tw-rotate-y: rotateY(0);
-          --tw-rotate-z: rotateZ(0);
-          --tw-skew-x: skewX(0);
-          --tw-skew-y: skewY(0);
+          --tw-rotate-x: initial;
+          --tw-rotate-y: initial;
+          --tw-rotate-z: initial;
+          --tw-skew-x: initial;
+          --tw-skew-y: initial;
         }
       }
     }
 
     .-skew-y-6 {
       --tw-skew-y: skewY(calc(6deg * -1));
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .skew-y-6 {
       --tw-skew-y: skewY(6deg);
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .skew-y-\\[123deg\\] {
       --tw-skew-y: skewY(123deg);
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     @property --tw-rotate-x {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateX(0);
+      inherits: false
     }
 
     @property --tw-rotate-y {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateY(0);
+      inherits: false
     }
 
     @property --tw-rotate-z {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateZ(0);
+      inherits: false
     }
 
     @property --tw-skew-x {
       syntax: "*";
-      inherits: false;
-      initial-value: skewX(0);
+      inherits: false
     }
 
     @property --tw-skew-y {
       syntax: "*";
-      inherits: false;
-      initial-value: skewY(0);
+      inherits: false
     }"
   `)
   expect(
@@ -5244,17 +5631,17 @@ test('transform', async () => {
     "@layer properties {
       @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
         *, :before, :after, ::backdrop {
-          --tw-rotate-x: rotateX(0);
-          --tw-rotate-y: rotateY(0);
-          --tw-rotate-z: rotateZ(0);
-          --tw-skew-x: skewX(0);
-          --tw-skew-y: skewY(0);
+          --tw-rotate-x: initial;
+          --tw-rotate-y: initial;
+          --tw-rotate-z: initial;
+          --tw-skew-x: initial;
+          --tw-skew-y: initial;
         }
       }
     }
 
     .transform {
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .transform-\\[scaleZ\\(2\\)_rotateY\\(45deg\\)\\] {
@@ -5262,11 +5649,11 @@ test('transform', async () => {
     }
 
     .transform-cpu {
-      transform: var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .transform-gpu {
-      transform: translateZ(0) var(--tw-rotate-x) var(--tw-rotate-y) var(--tw-rotate-z) var(--tw-skew-x) var(--tw-skew-y);
+      transform: translateZ(0) var(--tw-rotate-x, ) var(--tw-rotate-y, ) var(--tw-rotate-z, ) var(--tw-skew-x, ) var(--tw-skew-y, );
     }
 
     .transform-none {
@@ -5275,32 +5662,27 @@ test('transform', async () => {
 
     @property --tw-rotate-x {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateX(0);
+      inherits: false
     }
 
     @property --tw-rotate-y {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateY(0);
+      inherits: false
     }
 
     @property --tw-rotate-z {
       syntax: "*";
-      inherits: false;
-      initial-value: rotateZ(0);
+      inherits: false
     }
 
     @property --tw-skew-x {
       syntax: "*";
-      inherits: false;
-      initial-value: skewX(0);
+      inherits: false
     }
 
     @property --tw-skew-y {
       syntax: "*";
-      inherits: false;
-      initial-value: skewY(0);
+      inherits: false
     }"
   `)
   expect(
@@ -5316,42 +5698,42 @@ test('transform', async () => {
       'backface-hidden',
     ]),
   ).toMatchInlineSnapshot(`
-      ".backface-hidden {
-        backface-visibility: hidden;
-      }
+    ".backface-hidden {
+      backface-visibility: hidden;
+    }
 
-      .backface-visible {
-        backface-visibility: visible;
-      }
+    .backface-visible {
+      backface-visibility: visible;
+    }
 
-      .transform-3d {
-        transform-style: preserve-3d;
-      }
+    .transform-3d {
+      transform-style: preserve-3d;
+    }
 
-      .transform-border {
-        transform-box: border-box;
-      }
+    .transform-border {
+      transform-box: border-box;
+    }
 
-      .transform-content {
-        transform-box: content-box;
-      }
+    .transform-content {
+      transform-box: content-box;
+    }
 
-      .transform-fill {
-        transform-box: fill-box;
-      }
+    .transform-fill {
+      transform-box: fill-box;
+    }
 
-      .transform-flat {
-        transform-style: flat;
-      }
+    .transform-flat {
+      transform-style: flat;
+    }
 
-      .transform-stroke {
-        transform-box: stroke-box;
-      }
+    .transform-stroke {
+      transform-box: stroke-box;
+    }
 
-      .transform-view {
-        transform-box: view-box;
-      }"
-    `)
+    .transform-view {
+      transform-box: view-box;
+    }"
+  `)
   expect(
     await run([
       '-transform',
@@ -5422,6 +5804,26 @@ test('perspective', async () => {
       'perspective-[456px]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --perspective-none: 400px;
+        }
+        @tailwind utilities;
+      `,
+      ['perspective-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --perspective-none: 400px;
+    }
+
+    .perspective-none {
+      perspective: var(--perspective-none);
+    }"
+  `)
 })
 
 test('cursor', async () => {
@@ -5862,26 +6264,26 @@ test('touch-pinch-zoom', async () => {
 test('select', async () => {
   expect(await run(['select-none', 'select-text', 'select-all', 'select-auto']))
     .toMatchInlineSnapshot(`
-    ".select-all {
-      -webkit-user-select: all;
-      user-select: all;
-    }
+      ".select-all {
+        -webkit-user-select: all;
+        user-select: all;
+      }
 
-    .select-auto {
-      -webkit-user-select: auto;
-      user-select: auto;
-    }
+      .select-auto {
+        -webkit-user-select: auto;
+        user-select: auto;
+      }
 
-    .select-none {
-      -webkit-user-select: none;
-      user-select: none;
-    }
+      .select-none {
+        -webkit-user-select: none;
+        user-select: none;
+      }
 
-    .select-text {
-      -webkit-user-select: text;
-      user-select: text;
-    }"
-  `)
+      .select-text {
+        -webkit-user-select: text;
+        user-select: text;
+      }"
+    `)
   expect(
     await run([
       '-select-none',
@@ -6006,22 +6408,22 @@ test('--tw-scroll-snap-strictness', async () => {
 test('scroll-snap-align', async () => {
   expect(await run(['snap-align-none', 'snap-start', 'snap-end', 'snap-center']))
     .toMatchInlineSnapshot(`
-    ".snap-align-none {
-      scroll-snap-align: none;
-    }
+      ".snap-align-none {
+        scroll-snap-align: none;
+      }
 
-    .snap-center {
-      scroll-snap-align: center;
-    }
+      .snap-center {
+        scroll-snap-align: center;
+      }
 
-    .snap-end {
-      scroll-snap-align: end;
-    }
+      .snap-end {
+        scroll-snap-align: end;
+      }
 
-    .snap-start {
-      scroll-snap-align: start;
-    }"
-  `)
+      .snap-start {
+        scroll-snap-align: start;
+      }"
+    `)
   expect(
     await run([
       '-snap-align-none',
@@ -6799,6 +7201,26 @@ test('list', async () => {
       'list-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --list-style-type-none: disc;
+        }
+        @tailwind utilities;
+      `,
+      ['list-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --list-style-type-none: disc;
+    }
+
+    .list-none {
+      list-style-type: var(--list-style-type-none);
+    }"
+  `)
 })
 
 test('list-image', async () => {
@@ -6820,6 +7242,26 @@ test('list-image', async () => {
       'list-image-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --list-style-image-none: url(../foo.png);
+        }
+        @tailwind utilities;
+      `,
+      ['list-image-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --list-style-image-none: url("../foo.png");
+    }
+
+    .list-image-none {
+      list-style-image: var(--list-style-image-none);
+    }"
+  `)
 })
 
 test('appearance', async () => {
@@ -6961,6 +7403,26 @@ test('columns', async () => {
       'columns-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --columns-auto: 3;
+        }
+        @tailwind utilities;
+      `,
+      ['columns-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --columns-auto: 3;
+    }
+
+    .columns-auto {
+      columns: var(--columns-auto);
+    }"
+  `)
 })
 
 test('break-before', async () => {
@@ -7181,6 +7643,26 @@ test('auto-cols', async () => {
       'auto-cols-[2fr]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-auto-columns-auto: 2fr;
+        }
+        @tailwind utilities;
+      `,
+      ['auto-cols-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-auto-columns-auto: 2fr;
+    }
+
+    .auto-cols-auto {
+      grid-auto-columns: var(--grid-auto-columns-auto);
+    }"
+  `)
 })
 
 test('grid-flow', async () => {
@@ -7272,6 +7754,26 @@ test('auto-rows', async () => {
       'auto-rows-[2fr]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-auto-rows-auto: 2fr;
+        }
+        @tailwind utilities;
+      `,
+      ['auto-rows-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-auto-rows-auto: 2fr;
+    }
+
+    .auto-rows-auto {
+      grid-auto-rows: var(--grid-auto-rows-auto);
+    }"
+  `)
 })
 
 test('grid-cols', async () => {
@@ -7321,6 +7823,26 @@ test('grid-cols', async () => {
       'grid-cols-[123]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-template-columns-none: 200px 1fr;
+        }
+        @tailwind utilities;
+      `,
+      ['grid-cols-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-template-columns-none: 200px 1fr;
+    }
+
+    .grid-cols-none {
+      grid-template-columns: var(--grid-template-columns-none);
+    }"
+  `)
 })
 
 test('grid-rows', async () => {
@@ -7370,27 +7892,47 @@ test('grid-rows', async () => {
       'grid-rows-[123]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --grid-template-rows-none: 200px 1fr;
+        }
+        @tailwind utilities;
+      `,
+      ['grid-rows-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --grid-template-rows-none: 200px 1fr;
+    }
+
+    .grid-rows-none {
+      grid-template-rows: var(--grid-template-rows-none);
+    }"
+  `)
 })
 
 test('flex-direction', async () => {
   expect(await run(['flex-row', 'flex-row-reverse', 'flex-col', 'flex-col-reverse']))
     .toMatchInlineSnapshot(`
-    ".flex-col {
-      flex-direction: column;
-    }
+      ".flex-col {
+        flex-direction: column;
+      }
 
-    .flex-col-reverse {
-      flex-direction: column-reverse;
-    }
+      .flex-col-reverse {
+        flex-direction: column-reverse;
+      }
 
-    .flex-row {
-      flex-direction: row;
-    }
+      .flex-row {
+        flex-direction: row;
+      }
 
-    .flex-row-reverse {
-      flex-direction: row-reverse;
-    }"
-  `)
+      .flex-row-reverse {
+        flex-direction: row-reverse;
+      }"
+    `)
   expect(
     await run([
       '-flex-row',
@@ -8363,31 +8905,31 @@ test('divide-style', async () => {
   expect(
     await run(['divide-solid', 'divide-dashed', 'divide-dotted', 'divide-double', 'divide-none']),
   ).toMatchInlineSnapshot(`
-      ":where(.divide-dashed > :not(:last-child)) {
-        --tw-border-style: dashed;
-        border-style: dashed;
-      }
+    ":where(.divide-dashed > :not(:last-child)) {
+      --tw-border-style: dashed;
+      border-style: dashed;
+    }
 
-      :where(.divide-dotted > :not(:last-child)) {
-        --tw-border-style: dotted;
-        border-style: dotted;
-      }
+    :where(.divide-dotted > :not(:last-child)) {
+      --tw-border-style: dotted;
+      border-style: dotted;
+    }
 
-      :where(.divide-double > :not(:last-child)) {
-        --tw-border-style: double;
-        border-style: double;
-      }
+    :where(.divide-double > :not(:last-child)) {
+      --tw-border-style: double;
+      border-style: double;
+    }
 
-      :where(.divide-none > :not(:last-child)) {
-        --tw-border-style: none;
-        border-style: none;
-      }
+    :where(.divide-none > :not(:last-child)) {
+      --tw-border-style: none;
+      border-style: none;
+    }
 
-      :where(.divide-solid > :not(:last-child)) {
-        --tw-border-style: solid;
-        border-style: solid;
-      }"
-    `)
+    :where(.divide-solid > :not(:last-child)) {
+      --tw-border-style: solid;
+      border-style: solid;
+    }"
+  `)
   expect(
     await run([
       'divide',
@@ -8411,6 +8953,7 @@ test('accent', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --accent-color-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -8422,6 +8965,7 @@ test('accent', async () => {
         'accent-red-500/2.75',
         'accent-red-500/[0.5]',
         'accent-red-500/[50%]',
+        'accent-blue-500',
         'accent-current',
         'accent-current/50',
         'accent-current/[0.5]',
@@ -8437,6 +8981,7 @@ test('accent', async () => {
   ).toMatchInlineSnapshot(`
     ":root, :host {
       --color-red-500: #ef4444;
+      --accent-color-blue-500: #3b82f6;
     }
 
     .accent-\\[\\#0088cc\\] {
@@ -8445,6 +8990,10 @@ test('accent', async () => {
 
     .accent-\\[\\#0088cc\\]\\/50, .accent-\\[\\#0088cc\\]\\/\\[0\\.5\\], .accent-\\[\\#0088cc\\]\\/\\[50\\%\\] {
       accent-color: oklab(59.9824% -.067 -.124 / .5);
+    }
+
+    .accent-blue-500 {
+      accent-color: var(--accent-color-blue-500);
     }
 
     .accent-current, .accent-current\\/50 {
@@ -8592,6 +9141,7 @@ test('caret', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --caret-color-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -8603,6 +9153,7 @@ test('caret', async () => {
         'caret-red-500/2.75',
         'caret-red-500/[0.5]',
         'caret-red-500/[50%]',
+        'caret-blue-500',
         'caret-current',
         'caret-current/50',
         'caret-current/[0.5]',
@@ -8618,6 +9169,7 @@ test('caret', async () => {
   ).toMatchInlineSnapshot(`
     ":root, :host {
       --color-red-500: #ef4444;
+      --caret-color-blue-500: #3b82f6;
     }
 
     .caret-\\[\\#0088cc\\] {
@@ -8626,6 +9178,10 @@ test('caret', async () => {
 
     .caret-\\[\\#0088cc\\]\\/50, .caret-\\[\\#0088cc\\]\\/\\[0\\.5\\], .caret-\\[\\#0088cc\\]\\/\\[50\\%\\] {
       caret-color: oklab(59.9824% -.067 -.124 / .5);
+    }
+
+    .caret-blue-500 {
+      caret-color: var(--caret-color-blue-500);
     }
 
     .caret-current, .caret-current\\/50 {
@@ -8771,6 +9327,7 @@ test('divide-color', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --border-color-best-blue: #6495ed;
         }
         @tailwind utilities;
       `,
@@ -8782,6 +9339,7 @@ test('divide-color', async () => {
         'divide-red-500/2.75',
         'divide-red-500/[0.5]',
         'divide-red-500/[50%]',
+        'divide-best-blue',
         'divide-current',
         'divide-current/50',
         'divide-current/[0.5]',
@@ -8797,6 +9355,7 @@ test('divide-color', async () => {
   ).toMatchInlineSnapshot(`
     ":root, :host {
       --color-red-500: #ef4444;
+      --border-color-best-blue: #6495ed;
     }
 
     :where(.divide-\\[\\#0088cc\\] > :not(:last-child)) {
@@ -8805,6 +9364,10 @@ test('divide-color', async () => {
 
     :where(.divide-\\[\\#0088cc\\]\\/50 > :not(:last-child)), :where(.divide-\\[\\#0088cc\\]\\/\\[0\\.5\\] > :not(:last-child)), :where(.divide-\\[\\#0088cc\\]\\/\\[50\\%\\] > :not(:last-child)) {
       border-color: oklab(59.9824% -.067 -.124 / .5);
+    }
+
+    :where(.divide-best-blue > :not(:last-child)) {
+      border-color: var(--border-color-best-blue);
     }
 
     :where(.divide-current > :not(:last-child)), :where(.divide-current\\/50 > :not(:last-child)) {
@@ -9274,18 +9837,18 @@ test('overflow-y', async () => {
 test('overscroll', async () => {
   expect(await run(['overscroll-auto', 'overscroll-contain', 'overscroll-none']))
     .toMatchInlineSnapshot(`
-    ".overscroll-auto {
-      overscroll-behavior: auto;
-    }
+      ".overscroll-auto {
+        overscroll-behavior: auto;
+      }
 
-    .overscroll-contain {
-      overscroll-behavior: contain;
-    }
+      .overscroll-contain {
+        overscroll-behavior: contain;
+      }
 
-    .overscroll-none {
-      overscroll-behavior: none;
-    }"
-  `)
+      .overscroll-none {
+        overscroll-behavior: none;
+      }"
+    `)
   expect(
     await run([
       'overscroll',
@@ -9302,18 +9865,18 @@ test('overscroll', async () => {
 test('overscroll-x', async () => {
   expect(await run(['overscroll-x-auto', 'overscroll-x-contain', 'overscroll-x-none']))
     .toMatchInlineSnapshot(`
-    ".overscroll-x-auto {
-      overscroll-behavior-x: auto;
-    }
+      ".overscroll-x-auto {
+        overscroll-behavior-x: auto;
+      }
 
-    .overscroll-x-contain {
-      overscroll-behavior-x: contain;
-    }
+      .overscroll-x-contain {
+        overscroll-behavior-x: contain;
+      }
 
-    .overscroll-x-none {
-      overscroll-behavior-x: none;
-    }"
-  `)
+      .overscroll-x-none {
+        overscroll-behavior-x: none;
+      }"
+    `)
   expect(
     await run([
       'overscroll-x',
@@ -9330,18 +9893,18 @@ test('overscroll-x', async () => {
 test('overscroll-y', async () => {
   expect(await run(['overscroll-y-auto', 'overscroll-y-contain', 'overscroll-y-none']))
     .toMatchInlineSnapshot(`
-    ".overscroll-y-auto {
-      overscroll-behavior-y: auto;
-    }
+      ".overscroll-y-auto {
+        overscroll-behavior-y: auto;
+      }
 
-    .overscroll-y-contain {
-      overscroll-behavior-y: contain;
-    }
+      .overscroll-y-contain {
+        overscroll-behavior-y: contain;
+      }
 
-    .overscroll-y-none {
-      overscroll-behavior-y: none;
-    }"
-  `)
+      .overscroll-y-none {
+        overscroll-behavior-y: none;
+      }"
+    `)
   expect(
     await run([
       'overscroll-y',
@@ -9483,22 +10046,22 @@ test('whitespace', async () => {
 test('text-wrap', async () => {
   expect(await run(['text-wrap', 'text-nowrap', 'text-balance', 'text-pretty']))
     .toMatchInlineSnapshot(`
-    ".text-balance {
-      text-wrap: balance;
-    }
+      ".text-balance {
+        text-wrap: balance;
+      }
 
-    .text-nowrap {
-      text-wrap: nowrap;
-    }
+      .text-nowrap {
+        text-wrap: nowrap;
+      }
 
-    .text-pretty {
-      text-wrap: pretty;
-    }
+      .text-pretty {
+        text-wrap: pretty;
+      }
 
-    .text-wrap {
-      text-wrap: wrap;
-    }"
-  `)
+      .text-wrap {
+        text-wrap: wrap;
+      }"
+    `)
   expect(
     await run([
       '-text-wrap',
@@ -9609,6 +10172,25 @@ test('rounded', async () => {
 
     .rounded-sm {
       border-radius: var(--radius-sm);
+    }"
+  `)
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --radius-full: 99999px;
+        }
+        @tailwind utilities;
+      `,
+      ['rounded-full'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --radius-full: 99999px;
+    }
+
+    .rounded-full {
+      border-radius: var(--radius-full);
     }"
   `)
   expect(
@@ -9786,15 +10368,11 @@ test('rounded-t', async () => {
     }
 
     .rounded-t-full {
-      border-top-left-radius: 3.40282e38px;
-      border-top-right-radius: 3.40282e38px;
       border-top-left-radius: var(--radius-full);
       border-top-right-radius: var(--radius-full);
     }
 
     .rounded-t-none {
-      border-top-left-radius: 0;
-      border-top-right-radius: 0;
       border-top-left-radius: var(--radius-none);
       border-top-right-radius: var(--radius-none);
     }
@@ -9853,15 +10431,11 @@ test('rounded-r', async () => {
     }
 
     .rounded-r-full {
-      border-top-right-radius: 3.40282e38px;
-      border-bottom-right-radius: 3.40282e38px;
       border-top-right-radius: var(--radius-full);
       border-bottom-right-radius: var(--radius-full);
     }
 
     .rounded-r-none {
-      border-top-right-radius: 0;
-      border-bottom-right-radius: 0;
       border-top-right-radius: var(--radius-none);
       border-bottom-right-radius: var(--radius-none);
     }
@@ -9920,15 +10494,11 @@ test('rounded-b', async () => {
     }
 
     .rounded-b-full {
-      border-bottom-right-radius: 3.40282e38px;
-      border-bottom-left-radius: 3.40282e38px;
       border-bottom-right-radius: var(--radius-full);
       border-bottom-left-radius: var(--radius-full);
     }
 
     .rounded-b-none {
-      border-bottom-right-radius: 0;
-      border-bottom-left-radius: 0;
       border-bottom-right-radius: var(--radius-none);
       border-bottom-left-radius: var(--radius-none);
     }
@@ -9987,15 +10557,11 @@ test('rounded-l', async () => {
     }
 
     .rounded-l-full {
-      border-top-left-radius: 3.40282e38px;
-      border-bottom-left-radius: 3.40282e38px;
       border-top-left-radius: var(--radius-full);
       border-bottom-left-radius: var(--radius-full);
     }
 
     .rounded-l-none {
-      border-top-left-radius: 0;
-      border-bottom-left-radius: 0;
       border-top-left-radius: var(--radius-none);
       border-bottom-left-radius: var(--radius-none);
     }
@@ -10284,12 +10850,10 @@ test('rounded-tl', async () => {
     }
 
     .rounded-tl-full {
-      border-top-left-radius: 3.40282e38px;
       border-top-left-radius: var(--radius-full);
     }
 
     .rounded-tl-none {
-      border-top-left-radius: 0;
       border-top-left-radius: var(--radius-none);
     }
 
@@ -10344,12 +10908,10 @@ test('rounded-tr', async () => {
     }
 
     .rounded-tr-full {
-      border-top-right-radius: 3.40282e38px;
       border-top-right-radius: var(--radius-full);
     }
 
     .rounded-tr-none {
-      border-top-right-radius: 0;
       border-top-right-radius: var(--radius-none);
     }
 
@@ -10404,12 +10966,10 @@ test('rounded-br', async () => {
     }
 
     .rounded-br-full {
-      border-bottom-right-radius: 3.40282e38px;
       border-bottom-right-radius: var(--radius-full);
     }
 
     .rounded-br-none {
-      border-bottom-right-radius: 0;
       border-bottom-right-radius: var(--radius-none);
     }
 
@@ -10464,12 +11024,10 @@ test('rounded-bl', async () => {
     }
 
     .rounded-bl-full {
-      border-bottom-left-radius: 3.40282e38px;
       border-bottom-left-radius: var(--radius-full);
     }
 
     .rounded-bl-none {
-      border-bottom-left-radius: 0;
       border-bottom-left-radius: var(--radius-none);
     }
 
@@ -10595,6 +11153,7 @@ for (let prefix of prefixes) {
     classes.push(`${prefix}-red-500/2.25`)
     classes.push(`${prefix}-red-500/2.5`)
     classes.push(`${prefix}-red-500/2.75`)
+    classes.push(`${prefix}-blue-500`)
     classes.push(`${prefix}-[#0088cc]`)
     classes.push(`${prefix}-[#0088cc]/50`)
     classes.push(`${prefix}-current`)
@@ -10616,6 +11175,7 @@ for (let prefix of prefixes) {
             --radius-full: 9999px;
             --radius-sm: 0.125rem;
             --color-red-500: #ef4444;
+            --border-color-blue-500: #3b82f6;
           }
           @tailwind utilities;
         `,
@@ -10683,6 +11243,7 @@ test('bg', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --background-color-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -10695,6 +11256,9 @@ test('bg', async () => {
         'bg-red-500/2.75',
         'bg-red-500/[0.5]',
         'bg-red-500/[50%]',
+        'bg-red-500/100',
+        'bg-red-500/[100%]',
+        'bg-blue-500',
         'bg-current',
         'bg-current/50',
         'bg-current/[0.5]',
@@ -10828,6 +11392,7 @@ test('bg', async () => {
   ).toMatchInlineSnapshot(`
     ":root, :host {
       --color-red-500: #ef4444;
+      --background-color-blue-500: #3b82f6;
     }
 
     .bg-\\[\\#0088cc\\] {
@@ -10896,6 +11461,10 @@ test('bg', async () => {
       .bg-\\[var\\(--some-var\\)\\]\\/\\[50\\%\\] {
         background-color: color-mix(in oklab, var(--some-var) 50%, transparent);
       }
+    }
+
+    .bg-blue-500 {
+      background-color: var(--background-color-blue-500);
     }
 
     .bg-current, .bg-current\\/50 {
@@ -10986,6 +11555,10 @@ test('bg', async () => {
       }
     }
 
+    .bg-red-500\\/100 {
+      background-color: var(--color-red-500);
+    }
+
     .bg-red-500\\/\\[0\\.5\\] {
       background-color: #ef444480;
     }
@@ -11006,13 +11579,16 @@ test('bg', async () => {
       }
     }
 
+    .bg-red-500\\/\\[100\\%\\] {
+      background-color: var(--color-red-500);
+    }
+
     .bg-transparent {
       background-color: #0000;
     }
 
     .-bg-linear-45 {
       --tw-gradient-position: calc(45deg * -1);
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11021,9 +11597,12 @@ test('bg', async () => {
       }
     }
 
+    .-bg-linear-45 {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .-bg-linear-45\\/oklab {
       --tw-gradient-position: calc(45deg * -1);
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11032,9 +11611,12 @@ test('bg', async () => {
       }
     }
 
+    .-bg-linear-45\\/oklab {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-45 {
       --tw-gradient-position: 45deg;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11043,9 +11625,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-45 {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-45\\/\\[in_hsl_longer_hue\\] {
       --tw-gradient-position: 45deg;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11054,9 +11639,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-45\\/\\[in_hsl_longer_hue\\] {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-45\\/oklab {
       --tw-gradient-position: 45deg;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11065,9 +11653,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-45\\/oklab {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-45\\/shorter {
       --tw-gradient-position: 45deg;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11076,9 +11667,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-45\\/shorter {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-b {
       --tw-gradient-position: to bottom;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11087,9 +11681,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-b {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-bl {
       --tw-gradient-position: to bottom left;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11098,9 +11695,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-bl {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-br {
       --tw-gradient-position: to bottom right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11109,9 +11709,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-br {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-l {
       --tw-gradient-position: to left;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11120,9 +11723,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-l {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11131,9 +11737,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/\\[in_hsl_longer_hue\\] {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11142,9 +11751,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/\\[in_hsl_longer_hue\\] {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/\\[longer\\] {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11153,9 +11765,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/\\[longer\\] {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/decreasing {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11164,9 +11779,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/decreasing {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/hsl {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11175,9 +11793,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/hsl {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/increasing {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11186,9 +11807,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/increasing {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/longer {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11197,9 +11821,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/longer {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/oklab {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11208,9 +11835,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/oklab {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/oklch {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11219,9 +11849,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/oklch {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/shorter {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11230,9 +11863,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/shorter {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-r\\/srgb {
       --tw-gradient-position: to right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11241,9 +11877,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-r\\/srgb {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-t {
       --tw-gradient-position: to top;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11252,9 +11891,12 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-t {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-tl {
       --tw-gradient-position: to top left;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
@@ -11263,15 +11905,22 @@ test('bg', async () => {
       }
     }
 
+    .bg-linear-to-tl {
+      background-image: linear-gradient(var(--tw-gradient-stops));
+    }
+
     .bg-linear-to-tr {
       --tw-gradient-position: to top right;
-      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     @supports (background-image: linear-gradient(in lab, red, red)) {
       .bg-linear-to-tr {
         --tw-gradient-position: to top right in oklab;
       }
+    }
+
+    .bg-linear-to-tr {
+      background-image: linear-gradient(var(--tw-gradient-stops));
     }
 
     .-bg-conic-45\\/oklab {
@@ -11850,9 +12499,13 @@ test('from', async () => {
       --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
-    .from-\\[color\\:var\\(--my-color\\)\\], .from-\\[color\\:var\\(--my-color\\)\\]\\/50 {
+    .from-\\[color\\:var\\(--my-color\\)\\] {
       --tw-gradient-from: var(--my-color);
       --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .from-\\[color\\:var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-from: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11861,9 +12514,12 @@ test('from', async () => {
       }
     }
 
+    .from-\\[color\\:var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .from-\\[color\\:var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
       --tw-gradient-from: var(--my-color);
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11872,9 +12528,12 @@ test('from', async () => {
       }
     }
 
+    .from-\\[color\\:var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .from-\\[color\\:var\\(--my-color\\)\\]\\/\\[50\\%\\] {
       --tw-gradient-from: var(--my-color);
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11883,9 +12542,17 @@ test('from', async () => {
       }
     }
 
-    .from-\\[var\\(--my-color\\)\\], .from-\\[var\\(--my-color\\)\\]\\/50 {
+    .from-\\[color\\:var\\(--my-color\\)\\]\\/\\[50\\%\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .from-\\[var\\(--my-color\\)\\] {
       --tw-gradient-from: var(--my-color);
       --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .from-\\[var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-from: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11894,9 +12561,12 @@ test('from', async () => {
       }
     }
 
+    .from-\\[var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .from-\\[var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
       --tw-gradient-from: var(--my-color);
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11905,9 +12575,12 @@ test('from', async () => {
       }
     }
 
+    .from-\\[var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .from-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
       --tw-gradient-from: var(--my-color);
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11916,9 +12589,17 @@ test('from', async () => {
       }
     }
 
-    .from-current, .from-current\\/50 {
+    .from-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .from-current {
       --tw-gradient-from: currentcolor;
       --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .from-current\\/50 {
+      --tw-gradient-from: currentcolor;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11927,9 +12608,12 @@ test('from', async () => {
       }
     }
 
+    .from-current\\/50 {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .from-current\\/\\[0\\.5\\] {
       --tw-gradient-from: currentcolor;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11938,15 +12622,22 @@ test('from', async () => {
       }
     }
 
+    .from-current\\/\\[0\\.5\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .from-current\\/\\[50\\%\\] {
       --tw-gradient-from: currentcolor;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .from-current\\/\\[50\\%\\] {
         --tw-gradient-from: color-mix(in oklab, currentcolor 50%, transparent);
       }
+    }
+
+    .from-current\\/\\[50\\%\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     .from-inherit {
@@ -11961,7 +12652,6 @@ test('from', async () => {
 
     .from-red-500\\/50 {
       --tw-gradient-from: #ef444480;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11970,9 +12660,12 @@ test('from', async () => {
       }
     }
 
+    .from-red-500\\/50 {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .from-red-500\\/\\[0\\.5\\] {
       --tw-gradient-from: #ef444480;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -11981,15 +12674,22 @@ test('from', async () => {
       }
     }
 
+    .from-red-500\\/\\[0\\.5\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .from-red-500\\/\\[50\\%\\] {
       --tw-gradient-from: #ef444480;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .from-red-500\\/\\[50\\%\\] {
         --tw-gradient-from: color-mix(in oklab, var(--color-red-500) 50%, transparent);
       }
+    }
+
+    .from-red-500\\/\\[50\\%\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     .from-transparent {
@@ -12184,10 +12884,14 @@ test('via', async () => {
       --tw-gradient-stops: var(--tw-gradient-via-stops);
     }
 
-    .via-\\[color\\:var\\(--my-color\\)\\], .via-\\[color\\:var\\(--my-color\\)\\]\\/50 {
+    .via-\\[color\\:var\\(--my-color\\)\\] {
       --tw-gradient-via: var(--my-color);
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-\\[color\\:var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-via: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12196,10 +12900,13 @@ test('via', async () => {
       }
     }
 
-    .via-\\[color\\:var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
-      --tw-gradient-via: var(--my-color);
+    .via-\\[color\\:var\\(--my-color\\)\\]\\/50 {
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-\\[color\\:var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
+      --tw-gradient-via: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12208,10 +12915,13 @@ test('via', async () => {
       }
     }
 
-    .via-\\[color\\:var\\(--my-color\\)\\]\\/\\[50\\%\\] {
-      --tw-gradient-via: var(--my-color);
+    .via-\\[color\\:var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-\\[color\\:var\\(--my-color\\)\\]\\/\\[50\\%\\] {
+      --tw-gradient-via: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12220,10 +12930,19 @@ test('via', async () => {
       }
     }
 
-    .via-\\[var\\(--my-color\\)\\], .via-\\[var\\(--my-color\\)\\]\\/50 {
+    .via-\\[color\\:var\\(--my-color\\)\\]\\/\\[50\\%\\] {
+      --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
+      --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-\\[var\\(--my-color\\)\\] {
       --tw-gradient-via: var(--my-color);
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-\\[var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-via: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12232,10 +12951,13 @@ test('via', async () => {
       }
     }
 
-    .via-\\[var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
-      --tw-gradient-via: var(--my-color);
+    .via-\\[var\\(--my-color\\)\\]\\/50 {
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-\\[var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
+      --tw-gradient-via: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12244,10 +12966,13 @@ test('via', async () => {
       }
     }
 
-    .via-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
-      --tw-gradient-via: var(--my-color);
+    .via-\\[var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
+      --tw-gradient-via: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12256,10 +12981,19 @@ test('via', async () => {
       }
     }
 
-    .via-current, .via-current\\/50 {
+    .via-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
+      --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
+      --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-current {
       --tw-gradient-via: currentcolor;
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-current\\/50 {
+      --tw-gradient-via: currentcolor;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12268,10 +13002,13 @@ test('via', async () => {
       }
     }
 
-    .via-current\\/\\[0\\.5\\] {
-      --tw-gradient-via: currentcolor;
+    .via-current\\/50 {
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-current\\/\\[0\\.5\\] {
+      --tw-gradient-via: currentcolor;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12280,16 +13017,24 @@ test('via', async () => {
       }
     }
 
-    .via-current\\/\\[50\\%\\] {
-      --tw-gradient-via: currentcolor;
+    .via-current\\/\\[0\\.5\\] {
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-current\\/\\[50\\%\\] {
+      --tw-gradient-via: currentcolor;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .via-current\\/\\[50\\%\\] {
         --tw-gradient-via: color-mix(in oklab, currentcolor 50%, transparent);
       }
+    }
+
+    .via-current\\/\\[50\\%\\] {
+      --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
+      --tw-gradient-stops: var(--tw-gradient-via-stops);
     }
 
     .via-inherit {
@@ -12306,8 +13051,6 @@ test('via', async () => {
 
     .via-red-500\\/50 {
       --tw-gradient-via: #ef444480;
-      --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
-      --tw-gradient-stops: var(--tw-gradient-via-stops);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12316,10 +13059,13 @@ test('via', async () => {
       }
     }
 
-    .via-red-500\\/\\[0\\.5\\] {
-      --tw-gradient-via: #ef444480;
+    .via-red-500\\/50 {
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-red-500\\/\\[0\\.5\\] {
+      --tw-gradient-via: #ef444480;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12328,16 +13074,24 @@ test('via', async () => {
       }
     }
 
-    .via-red-500\\/\\[50\\%\\] {
-      --tw-gradient-via: #ef444480;
+    .via-red-500\\/\\[0\\.5\\] {
       --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
       --tw-gradient-stops: var(--tw-gradient-via-stops);
+    }
+
+    .via-red-500\\/\\[50\\%\\] {
+      --tw-gradient-via: #ef444480;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .via-red-500\\/\\[50\\%\\] {
         --tw-gradient-via: color-mix(in oklab, var(--color-red-500) 50%, transparent);
       }
+    }
+
+    .via-red-500\\/\\[50\\%\\] {
+      --tw-gradient-via-stops: var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-via) var(--tw-gradient-via-position), var(--tw-gradient-to) var(--tw-gradient-to-position);
+      --tw-gradient-stops: var(--tw-gradient-via-stops);
     }
 
     .via-transparent {
@@ -12529,9 +13283,13 @@ test('to', async () => {
       --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
-    .to-\\[color\\:var\\(--my-color\\)\\], .to-\\[color\\:var\\(--my-color\\)\\]\\/50 {
+    .to-\\[color\\:var\\(--my-color\\)\\] {
       --tw-gradient-to: var(--my-color);
       --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .to-\\[color\\:var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-to: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12540,9 +13298,12 @@ test('to', async () => {
       }
     }
 
+    .to-\\[color\\:var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .to-\\[color\\:var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
       --tw-gradient-to: var(--my-color);
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12551,9 +13312,12 @@ test('to', async () => {
       }
     }
 
+    .to-\\[color\\:var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .to-\\[color\\:var\\(--my-color\\)\\]\\/\\[50\\%\\] {
       --tw-gradient-to: var(--my-color);
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12562,9 +13326,17 @@ test('to', async () => {
       }
     }
 
-    .to-\\[var\\(--my-color\\)\\], .to-\\[var\\(--my-color\\)\\]\\/50 {
+    .to-\\[color\\:var\\(--my-color\\)\\]\\/\\[50\\%\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .to-\\[var\\(--my-color\\)\\] {
       --tw-gradient-to: var(--my-color);
       --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .to-\\[var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-to: var(--my-color);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12573,9 +13345,12 @@ test('to', async () => {
       }
     }
 
+    .to-\\[var\\(--my-color\\)\\]\\/50 {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .to-\\[var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
       --tw-gradient-to: var(--my-color);
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12584,9 +13359,12 @@ test('to', async () => {
       }
     }
 
+    .to-\\[var\\(--my-color\\)\\]\\/\\[0\\.5\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .to-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
       --tw-gradient-to: var(--my-color);
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12595,9 +13373,17 @@ test('to', async () => {
       }
     }
 
-    .to-current, .to-current\\/50 {
+    .to-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .to-current {
       --tw-gradient-to: currentcolor;
       --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
+    .to-current\\/50 {
+      --tw-gradient-to: currentcolor;
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12606,9 +13392,12 @@ test('to', async () => {
       }
     }
 
+    .to-current\\/50 {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .to-current\\/\\[0\\.5\\] {
       --tw-gradient-to: currentcolor;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12617,15 +13406,22 @@ test('to', async () => {
       }
     }
 
+    .to-current\\/\\[0\\.5\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .to-current\\/\\[50\\%\\] {
       --tw-gradient-to: currentcolor;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .to-current\\/\\[50\\%\\] {
         --tw-gradient-to: color-mix(in oklab, currentcolor 50%, transparent);
       }
+    }
+
+    .to-current\\/\\[50\\%\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     .to-inherit {
@@ -12640,7 +13436,6 @@ test('to', async () => {
 
     .to-red-500\\/50 {
       --tw-gradient-to: #ef444480;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12649,9 +13444,12 @@ test('to', async () => {
       }
     }
 
+    .to-red-500\\/50 {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .to-red-500\\/\\[0\\.5\\] {
       --tw-gradient-to: #ef444480;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -12660,15 +13458,22 @@ test('to', async () => {
       }
     }
 
+    .to-red-500\\/\\[0\\.5\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
+    }
+
     .to-red-500\\/\\[50\\%\\] {
       --tw-gradient-to: #ef444480;
-      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .to-red-500\\/\\[50\\%\\] {
         --tw-gradient-to: color-mix(in oklab, var(--color-red-500) 50%, transparent);
       }
+    }
+
+    .to-red-500\\/\\[50\\%\\] {
+      --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
     }
 
     .to-transparent {
@@ -18604,18 +19409,18 @@ test('bg-clip', async () => {
 test('bg-origin', async () => {
   expect(await run(['bg-origin-border', 'bg-origin-padding', 'bg-origin-content']))
     .toMatchInlineSnapshot(`
-    ".bg-origin-border {
-      background-origin: border-box;
-    }
+      ".bg-origin-border {
+        background-origin: border-box;
+      }
 
-    .bg-origin-content {
-      background-origin: content-box;
-    }
+      .bg-origin-content {
+        background-origin: content-box;
+      }
 
-    .bg-origin-padding {
-      background-origin: padding-box;
-    }"
-  `)
+      .bg-origin-padding {
+        background-origin: padding-box;
+      }"
+    `)
   expect(
     await run([
       'bg-origin',
@@ -19024,6 +19829,7 @@ test('fill', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --fill-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -19035,6 +19841,7 @@ test('fill', async () => {
         'fill-red-500/2.75',
         'fill-red-500/[0.5]',
         'fill-red-500/[50%]',
+        'fill-blue-500',
         'fill-current',
         'fill-current/50',
         'fill-current/[0.5]',
@@ -19050,6 +19857,7 @@ test('fill', async () => {
   ).toMatchInlineSnapshot(`
     ":root, :host {
       --color-red-500: #ef4444;
+      --fill-blue-500: #3b82f6;
     }
 
     .fill-\\[\\#0088cc\\] {
@@ -19058,6 +19866,10 @@ test('fill', async () => {
 
     .fill-\\[\\#0088cc\\]\\/50, .fill-\\[\\#0088cc\\]\\/\\[0\\.5\\], .fill-\\[\\#0088cc\\]\\/\\[50\\%\\] {
       fill: oklab(59.9824% -.067 -.124 / .5);
+    }
+
+    .fill-blue-500 {
+      fill: var(--fill-blue-500);
     }
 
     .fill-current, .fill-current\\/50 {
@@ -19190,6 +20002,7 @@ test('stroke', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --stroke-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -19202,6 +20015,7 @@ test('stroke', async () => {
         'stroke-red-500/2.75',
         'stroke-red-500/[0.5]',
         'stroke-red-500/[50%]',
+        'stroke-blue-500',
         'stroke-current',
         'stroke-current/50',
         'stroke-current/[0.5]',
@@ -19237,6 +20051,7 @@ test('stroke', async () => {
   ).toMatchInlineSnapshot(`
     ":root, :host {
       --color-red-500: #ef4444;
+      --stroke-blue-500: #3b82f6;
     }
 
     .stroke-\\[\\#0088cc\\] {
@@ -19305,6 +20120,10 @@ test('stroke', async () => {
       .stroke-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
         stroke: color-mix(in oklab, var(--my-color) 50%, transparent);
       }
+    }
+
+    .stroke-blue-500 {
+      stroke: var(--stroke-blue-500);
     }
 
     .stroke-current, .stroke-current\\/50 {
@@ -19605,6 +20424,26 @@ test('object', async () => {
       'object-top/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --object-position-center: top left;
+        }
+        @tailwind utilities;
+      `,
+      ['object-center'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --object-position-center: top left;
+    }
+
+    .object-center {
+      object-position: var(--object-position-center);
+    }"
+  `)
 })
 
 test('p', async () => {
@@ -20307,22 +21146,22 @@ test('font-stretch', async () => {
 test('text-decoration-line', async () => {
   expect(await run(['underline', 'overline', 'line-through', 'no-underline']))
     .toMatchInlineSnapshot(`
-    ".line-through {
-      text-decoration-line: line-through;
-    }
+      ".line-through {
+        text-decoration-line: line-through;
+      }
 
-    .no-underline {
-      text-decoration-line: none;
-    }
+      .no-underline {
+        text-decoration-line: none;
+      }
 
-    .overline {
-      text-decoration-line: overline;
-    }
+      .overline {
+        text-decoration-line: overline;
+      }
 
-    .underline {
-      text-decoration-line: underline;
-    }"
-  `)
+      .underline {
+        text-decoration-line: underline;
+      }"
+    `)
   expect(
     await run([
       '-underline',
@@ -20508,6 +21347,7 @@ test('decoration', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --text-decoration-color-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -20517,6 +21357,7 @@ test('decoration', async () => {
         'decoration-red-500/50',
         'decoration-red-500/[0.5]',
         'decoration-red-500/[50%]',
+        'decoration-blue-500',
         'decoration-current',
         'decoration-current/50',
         'decoration-current/[0.5]',
@@ -20560,6 +21401,7 @@ test('decoration', async () => {
   ).toMatchInlineSnapshot(`
     ":root, :host {
       --color-red-500: #ef4444;
+      --text-decoration-color-blue-500: #3b82f6;
     }
 
     .decoration-\\[\\#0088cc\\] {
@@ -20652,6 +21494,12 @@ test('decoration', async () => {
         -webkit-text-decoration-color: color-mix(in oklab, var(--my-color) 50%, transparent);
         text-decoration-color: color-mix(in oklab, var(--my-color) 50%, transparent);
       }
+    }
+
+    .decoration-blue-500 {
+      -webkit-text-decoration-color: var(--text-decoration-color-blue-500);
+      -webkit-text-decoration-color: var(--text-decoration-color-blue-500);
+      text-decoration-color: var(--text-decoration-color-blue-500);
     }
 
     .decoration-current, .decoration-current\\/50 {
@@ -20898,6 +21746,26 @@ test('animate', async () => {
       'animate-not-found/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --animate-none: bounce 1s infinite;
+        }
+        @tailwind utilities;
+      `,
+      ['animate-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --animate-none: bounce 1s infinite;
+    }
+
+    .animate-none {
+      animation: var(--animate-none);
+    }"
+  `)
 })
 
 test('filter', async () => {
@@ -20943,6 +21811,8 @@ test('filter', async () => {
         'drop-shadow-[0_0_red]',
         'drop-shadow-red-500',
         'drop-shadow-red-500/50',
+        'drop-shadow-none',
+        'drop-shadow-inherit',
         'saturate-0',
         'saturate-[1.75]',
         'saturate-[var(--value)]',
@@ -21046,9 +21916,18 @@ test('filter', async () => {
       filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
     }
 
+    .drop-shadow-none {
+      --tw-drop-shadow: ;
+      filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+    }
+
+    .drop-shadow-inherit {
+      --tw-drop-shadow-color: inherit;
+      --tw-drop-shadow: var(--tw-drop-shadow-size);
+    }
+
     .drop-shadow-red-500 {
       --tw-drop-shadow-color: #ef4444;
-      --tw-drop-shadow: var(--tw-drop-shadow-size);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
@@ -21057,15 +21936,22 @@ test('filter', async () => {
       }
     }
 
+    .drop-shadow-red-500 {
+      --tw-drop-shadow: var(--tw-drop-shadow-size);
+    }
+
     .drop-shadow-red-500\\/50 {
       --tw-drop-shadow-color: #ef444480;
-      --tw-drop-shadow: var(--tw-drop-shadow-size);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .drop-shadow-red-500\\/50 {
         --tw-drop-shadow-color: color-mix(in oklab, color-mix(in oklab, var(--color-red-500) 50%, transparent) var(--tw-drop-shadow-alpha), transparent);
       }
+    }
+
+    .drop-shadow-red-500\\/50 {
+      --tw-drop-shadow: var(--tw-drop-shadow-size);
     }
 
     .grayscale {
@@ -21309,6 +22195,113 @@ test('filter', async () => {
       'sepia-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --blur-none: 2px;
+        }
+        @tailwind utilities;
+      `,
+      ['blur-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    "@layer properties {
+      @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+        *, :before, :after, ::backdrop {
+          --tw-blur: initial;
+          --tw-brightness: initial;
+          --tw-contrast: initial;
+          --tw-grayscale: initial;
+          --tw-hue-rotate: initial;
+          --tw-invert: initial;
+          --tw-opacity: initial;
+          --tw-saturate: initial;
+          --tw-sepia: initial;
+          --tw-drop-shadow: initial;
+          --tw-drop-shadow-color: initial;
+          --tw-drop-shadow-alpha: 100%;
+          --tw-drop-shadow-size: initial;
+        }
+      }
+    }
+
+    :root, :host {
+      --blur-none: 2px;
+    }
+
+    .blur-none {
+      --tw-blur: blur(var(--blur-none));
+      filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+    }
+
+    @property --tw-blur {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-brightness {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-contrast {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-grayscale {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-hue-rotate {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-invert {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-opacity {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-saturate {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-sepia {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-drop-shadow {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-drop-shadow-color {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-drop-shadow-alpha {
+      syntax: "<percentage>";
+      inherits: false;
+      initial-value: 100%;
+    }
+
+    @property --tw-drop-shadow-size {
+      syntax: "*";
+      inherits: false
+    }"
+  `)
 })
 
 test('backdrop-filter', async () => {
@@ -21689,6 +22682,89 @@ test('backdrop-filter', async () => {
       'backdrop-sepia-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --backdrop-blur-none: 2px;
+        }
+        @tailwind utilities;
+      `,
+      ['backdrop-blur-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    "@layer properties {
+      @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+        *, :before, :after, ::backdrop {
+          --tw-backdrop-blur: initial;
+          --tw-backdrop-brightness: initial;
+          --tw-backdrop-contrast: initial;
+          --tw-backdrop-grayscale: initial;
+          --tw-backdrop-hue-rotate: initial;
+          --tw-backdrop-invert: initial;
+          --tw-backdrop-opacity: initial;
+          --tw-backdrop-saturate: initial;
+          --tw-backdrop-sepia: initial;
+        }
+      }
+    }
+
+    :root, :host {
+      --backdrop-blur-none: 2px;
+    }
+
+    .backdrop-blur-none {
+      --tw-backdrop-blur: blur(var(--backdrop-blur-none));
+      -webkit-backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+      backdrop-filter: var(--tw-backdrop-blur, ) var(--tw-backdrop-brightness, ) var(--tw-backdrop-contrast, ) var(--tw-backdrop-grayscale, ) var(--tw-backdrop-hue-rotate, ) var(--tw-backdrop-invert, ) var(--tw-backdrop-opacity, ) var(--tw-backdrop-saturate, ) var(--tw-backdrop-sepia, );
+    }
+
+    @property --tw-backdrop-blur {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-backdrop-brightness {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-backdrop-contrast {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-backdrop-grayscale {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-backdrop-hue-rotate {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-backdrop-invert {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-backdrop-opacity {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-backdrop-saturate {
+      syntax: "*";
+      inherits: false
+    }
+
+    @property --tw-backdrop-sepia {
+      syntax: "*";
+      inherits: false
+    }"
+  `)
 })
 
 test('transition', async () => {
@@ -21724,7 +22800,7 @@ test('transition', async () => {
     }
 
     .transition {
-      transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter;
+      transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;
       transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
       transition-duration: var(--tw-duration, var(--default-transition-duration));
     }
@@ -21748,9 +22824,6 @@ test('transition', async () => {
     }
 
     .transition-opacity {
-      transition-property: opacity;
-      transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
-      transition-duration: var(--tw-duration, var(--default-transition-duration));
       transition-property: var(--transition-property-opacity);
       transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
       transition-duration: var(--tw-duration, var(--default-transition-duration));
@@ -21786,7 +22859,7 @@ test('transition', async () => {
     ),
   ).toMatchInlineSnapshot(`
     ".transition {
-      transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter;
+      transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;
       transition-timing-function: var(--tw-ease, ease);
       transition-duration: var(--tw-duration, .1s);
     }
@@ -21836,6 +22909,28 @@ test('transition', async () => {
       'transition-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --transition-property-colors: transform;
+        }
+        @tailwind utilities;
+      `,
+      ['transition-colors'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --transition-property-colors: transform;
+    }
+
+    .transition-colors {
+      transition-property: var(--transition-property-colors);
+      transition-timing-function: var(--tw-ease, ease);
+      transition-duration: var(--tw-duration, 0s);
+    }"
+  `)
 })
 
 test('transition-behavior', async () => {
@@ -21979,6 +23074,40 @@ test('ease', async () => {
       'ease-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --ease-linear: steps(4);
+        }
+        @tailwind utilities;
+      `,
+      ['ease-linear'],
+    ),
+  ).toMatchInlineSnapshot(`
+    "@layer properties {
+      @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+        *, :before, :after, ::backdrop {
+          --tw-ease: initial;
+        }
+      }
+    }
+
+    :root, :host {
+      --ease-linear: steps(4);
+    }
+
+    .ease-linear {
+      --tw-ease: var(--ease-linear);
+      transition-timing-function: var(--ease-linear);
+    }
+
+    @property --tw-ease {
+      syntax: "*";
+      inherits: false
+    }"
+  `)
 })
 
 test('will-change', async () => {
@@ -22158,14 +23287,14 @@ test('content', async () => {
 test('forced-color-adjust', async () => {
   expect(await run(['forced-color-adjust-none', 'forced-color-adjust-auto']))
     .toMatchInlineSnapshot(`
-    ".forced-color-adjust-auto {
-      forced-color-adjust: auto;
-    }
+      ".forced-color-adjust-auto {
+        forced-color-adjust: auto;
+      }
 
-    .forced-color-adjust-none {
-      forced-color-adjust: none;
-    }"
-  `)
+      .forced-color-adjust-none {
+        forced-color-adjust: none;
+      }"
+    `)
   expect(
     await run([
       'forced',
@@ -22236,6 +23365,40 @@ test('leading', async () => {
       'leading-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --leading-none: 2;
+        }
+        @tailwind utilities;
+      `,
+      ['leading-none'],
+    ),
+  ).toMatchInlineSnapshot(`
+    "@layer properties {
+      @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+        *, :before, :after, ::backdrop {
+          --tw-leading: initial;
+        }
+      }
+    }
+
+    :root, :host {
+      --leading-none: 2;
+    }
+
+    .leading-none {
+      --tw-leading: var(--leading-none);
+      line-height: var(--leading-none);
+    }
+
+    @property --tw-leading {
+      syntax: "*";
+      inherits: false
+    }"
+  `)
 })
 
 test('tracking', async () => {
@@ -22447,6 +23610,7 @@ test('outline', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --outline-color-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -22466,6 +23630,7 @@ test('outline', async () => {
         'outline-red-500/50',
         'outline-red-500/[0.5]',
         'outline-red-500/[50%]',
+        'outline-blue-500',
         'outline-current',
         'outline-current/50',
         'outline-current/[0.5]',
@@ -22510,6 +23675,7 @@ test('outline', async () => {
 
     :root, :host {
       --color-red-500: #ef4444;
+      --outline-color-blue-500: #3b82f6;
     }
 
     .outline-hidden {
@@ -22636,6 +23802,10 @@ test('outline', async () => {
       .outline-\\[var\\(--value\\)\\]\\/\\[50\\%\\] {
         outline-color: color-mix(in oklab, var(--value) 50%, transparent);
       }
+    }
+
+    .outline-blue-500 {
+      outline-color: var(--outline-color-blue-500);
     }
 
     .outline-current, .outline-current\\/50 {
@@ -22956,6 +24126,26 @@ test('underline-offset', async () => {
       '-underline-offset-[var(--value)]/foo',
     ]),
   ).toEqual('')
+
+  expect(
+    await compileCss(
+      css`
+        @theme {
+          --text-underline-offset-auto: 4px;
+        }
+        @tailwind utilities;
+      `,
+      ['underline-offset-auto'],
+    ),
+  ).toMatchInlineSnapshot(`
+    ":root, :host {
+      --text-underline-offset-auto: 4px;
+    }
+
+    .underline-offset-auto {
+      text-underline-offset: var(--text-underline-offset-auto);
+    }"
+  `)
 })
 
 test('text', async () => {
@@ -22965,6 +24155,7 @@ test('text', async () => {
         @theme {
           --spacing: 0.25rem;
           --color-red-500: #ef4444;
+          --text-color-blue-500: #3b82f6;
           --text-sm: 0.875rem;
           --text-sm--line-height: 1.25rem;
           --leading-snug: 1.375;
@@ -22980,6 +24171,7 @@ test('text', async () => {
         'text-red-500/2.75',
         'text-red-500/[0.5]',
         'text-red-500/[50%]',
+        'text-blue-500',
         'text-current',
         'text-current/50',
         'text-current/[0.5]',
@@ -23028,6 +24220,7 @@ test('text', async () => {
     ":root, :host {
       --spacing: .25rem;
       --color-red-500: #ef4444;
+      --text-color-blue-500: #3b82f6;
       --text-sm: .875rem;
       --text-sm--line-height: 1.25rem;
       --leading-snug: 1.375;
@@ -23186,6 +24379,10 @@ test('text', async () => {
       .text-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
         color: color-mix(in oklab, var(--my-color) 50%, transparent);
       }
+    }
+
+    .text-blue-500 {
+      color: var(--text-color-blue-500);
     }
 
     .text-current, .text-current\\/50 {
@@ -23568,12 +24765,6 @@ test('text-shadow', async () => {
       --tw-text-shadow-color: inherit;
     }
 
-    @supports (color: color-mix(in lab, red, red)) {
-      .text-shadow-inherit {
-        --tw-text-shadow-color: color-mix(in oklab, inherit var(--tw-text-shadow-alpha), transparent);
-      }
-    }
-
     .text-shadow-none {
       text-shadow: none;
     }
@@ -23702,6 +24893,7 @@ test('shadow', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --box-shadow-color-blue-500: #3b82f6;
           --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
           --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
         }
@@ -23731,6 +24923,7 @@ test('shadow', async () => {
         'shadow-red-500/2.75',
         'shadow-red-500/[0.5]',
         'shadow-red-500/[50%]',
+        'shadow-blue-500',
         'shadow-current',
         'shadow-current/50',
         'shadow-current/[0.5]',
@@ -23771,12 +24964,12 @@ test('shadow', async () => {
 
     :root, :host {
       --color-red-500: #ef4444;
+      --box-shadow-color-blue-500: #3b82f6;
     }
 
     .shadow-\\[12px_12px_var\\(--value\\)\\]\\/25 {
       --tw-shadow-alpha: 25%;
       --tw-shadow: 12px 12px var(--tw-shadow-color, var(--value));
-      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
 
     @supports (color: lab(from red l a b)) {
@@ -23785,16 +24978,23 @@ test('shadow', async () => {
       }
     }
 
+    .shadow-\\[12px_12px_var\\(--value\\)\\]\\/25 {
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+    }
+
     .shadow-\\[10px_10px\\]\\/25 {
       --tw-shadow-alpha: 25%;
       --tw-shadow: 10px 10px var(--tw-shadow-color, currentcolor);
-      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .shadow-\\[10px_10px\\]\\/25 {
         --tw-shadow: 10px 10px var(--tw-shadow-color, color-mix(in oklab, currentcolor 25%, transparent));
       }
+    }
+
+    .shadow-\\[10px_10px\\]\\/25 {
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
 
     .shadow-\\[12px_12px_\\#0088cc\\]\\/25 {
@@ -23924,6 +25124,16 @@ test('shadow', async () => {
       }
     }
 
+    .shadow-blue-500 {
+      --tw-shadow-color: #3b82f6;
+    }
+
+    @supports (color: color-mix(in lab, red, red)) {
+      .shadow-blue-500 {
+        --tw-shadow-color: color-mix(in oklab, var(--box-shadow-color-blue-500) var(--tw-shadow-alpha), transparent);
+      }
+    }
+
     .shadow-current {
       --tw-shadow-color: currentcolor;
     }
@@ -23966,12 +25176,6 @@ test('shadow', async () => {
 
     .shadow-inherit {
       --tw-shadow-color: inherit;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .shadow-inherit {
-        --tw-shadow-color: color-mix(in oklab, inherit var(--tw-shadow-alpha), transparent);
-      }
     }
 
     .shadow-red-500 {
@@ -24238,7 +25442,6 @@ test('inset-shadow', async () => {
     .inset-shadow-\\[12px_12px_\\#0088cc\\,12px_12px_var\\(--value\\,\\#0088cc\\)\\]\\/25 {
       --tw-inset-shadow-alpha: 25%;
       --tw-inset-shadow: inset 12px 12px var(--tw-inset-shadow-color, #08c), inset 12px 12px var(--tw-inset-shadow-color, var(--value, #08c));
-      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
 
     @supports (color: lab(from red l a b)) {
@@ -24247,10 +25450,13 @@ test('inset-shadow', async () => {
       }
     }
 
+    .inset-shadow-\\[12px_12px_\\#0088cc\\,12px_12px_var\\(--value\\,\\#0088cc\\)\\]\\/25 {
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+    }
+
     .inset-shadow-\\[12px_12px_var\\(--value\\)\\]\\/25 {
       --tw-inset-shadow-alpha: 25%;
       --tw-inset-shadow: inset 12px 12px var(--tw-inset-shadow-color, var(--value));
-      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
 
     @supports (color: lab(from red l a b)) {
@@ -24259,16 +25465,23 @@ test('inset-shadow', async () => {
       }
     }
 
+    .inset-shadow-\\[12px_12px_var\\(--value\\)\\]\\/25 {
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+    }
+
     .inset-shadow-\\[10px_10px\\]\\/25 {
       --tw-inset-shadow-alpha: 25%;
       --tw-inset-shadow: inset 10px 10px var(--tw-inset-shadow-color, currentcolor);
-      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
 
     @supports (color: color-mix(in lab, red, red)) {
       .inset-shadow-\\[10px_10px\\]\\/25 {
         --tw-inset-shadow: inset 10px 10px var(--tw-inset-shadow-color, color-mix(in oklab, currentcolor 25%, transparent));
       }
+    }
+
+    .inset-shadow-\\[10px_10px\\]\\/25 {
+      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
 
     .inset-shadow-\\[12px_12px_\\#0088cc\\]\\/25 {
@@ -24445,12 +25658,6 @@ test('inset-shadow', async () => {
 
     .inset-shadow-inherit {
       --tw-inset-shadow-color: inherit;
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .inset-shadow-inherit {
-        --tw-inset-shadow-color: color-mix(in oklab, inherit var(--tw-inset-shadow-alpha), transparent);
-      }
     }
 
     .inset-shadow-red-500 {
@@ -24641,6 +25848,7 @@ test('ring', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --ring-color-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -24654,6 +25862,7 @@ test('ring', async () => {
         'ring-red-500/2.75',
         'ring-red-500/[0.5]',
         'ring-red-500/[50%]',
+        'ring-blue-500',
         'ring-current',
         'ring-current/50',
         'ring-current/[0.5]',
@@ -24707,6 +25916,7 @@ test('ring', async () => {
 
     :root, :host {
       --color-red-500: #ef4444;
+      --ring-color-blue-500: #3b82f6;
     }
 
     .ring {
@@ -24810,6 +26020,10 @@ test('ring', async () => {
       .ring-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
         --tw-ring-color: color-mix(in oklab, var(--my-color) 50%, transparent);
       }
+    }
+
+    .ring-blue-500 {
+      --tw-ring-color: var(--ring-color-blue-500);
     }
 
     .ring-current, .ring-current\\/50 {
@@ -25551,6 +26765,7 @@ test('ring-offset', async () => {
       css`
         @theme {
           --color-red-500: #ef4444;
+          --ring-offset-color-blue-500: #3b82f6;
         }
         @tailwind utilities;
       `,
@@ -25561,6 +26776,7 @@ test('ring-offset', async () => {
         'ring-offset-red-500/50',
         'ring-offset-red-500/[0.5]',
         'ring-offset-red-500/[50%]',
+        'ring-offset-blue-500',
         'ring-offset-current',
         'ring-offset-current/50',
         'ring-offset-current/[0.5]',
@@ -25593,6 +26809,7 @@ test('ring-offset', async () => {
   ).toMatchInlineSnapshot(`
     ":root, :host {
       --color-red-500: #ef4444;
+      --ring-offset-color-blue-500: #3b82f6;
     }
 
     .ring-offset-0 {
@@ -25691,6 +26908,10 @@ test('ring-offset', async () => {
       .ring-offset-\\[var\\(--my-color\\)\\]\\/\\[50\\%\\] {
         --tw-ring-offset-color: color-mix(in oklab, var(--my-color) 50%, transparent);
       }
+    }
+
+    .ring-offset-blue-500 {
+      --tw-ring-offset-color: var(--ring-offset-color-blue-500);
     }
 
     .ring-offset-current, .ring-offset-current\\/50 {
@@ -25809,16 +27030,16 @@ test('@container', async () => {
       '@container-normal',
       '@container/sidebar',
       '@container-normal/sidebar',
-      '@container-[size]',
-      '@container-[size]/sidebar',
+      '@container-size',
+      '@container-size/sidebar',
     ]),
   ).toMatchInlineSnapshot(`
-    ".\\@container-\\[size\\]\\/sidebar {
-      container: sidebar / size;
+    ".\\@container-normal\\/sidebar {
+      container: sidebar;
     }
 
-    .\\@container-normal\\/sidebar {
-      container: sidebar;
+    .\\@container-size\\/sidebar {
+      container: sidebar / size;
     }
 
     .\\@container\\/sidebar {
@@ -25829,12 +27050,12 @@ test('@container', async () => {
       container-type: inline-size;
     }
 
-    .\\@container-\\[size\\] {
-      container-type: size;
-    }
-
     .\\@container-normal {
       container-type: normal;
+    }
+
+    .\\@container-size {
+      container-type: size;
     }"
   `)
   expect(
@@ -25843,8 +27064,8 @@ test('@container', async () => {
       '-@container-normal',
       '-@container/sidebar',
       '-@container-normal/sidebar',
-      '-@container-[size]',
-      '-@container-[size]/sidebar',
+      '-@container-size',
+      '-@container-size/sidebar',
     ]),
   ).toEqual('')
 })
@@ -26588,22 +27809,22 @@ describe('custom utilities', () => {
 
       expect(await compileCss(input, ['example-1', 'example-0.5', 'example-20%', 'example-2/3']))
         .toMatchInlineSnapshot(`
-        ".example-0\\.5 {
-          --value-as-number: .5;
-        }
+          ".example-0\\.5 {
+            --value-as-number: .5;
+          }
 
-        .example-1 {
-          --value-as-number: 1;
-        }
+          .example-1 {
+            --value-as-number: 1;
+          }
 
-        .example-2\\/3 {
-          --value-as-ratio: 2 / 3;
-        }
+          .example-2\\/3 {
+            --value-as-ratio: 2 / 3;
+          }
 
-        .example-20\\% {
-          --value-as-percentage: 20%;
-        }"
-      `)
+          .example-20\\% {
+            --value-as-percentage: 20%;
+          }"
+        `)
       expect(
         await compileCss(input, [
           'example-1.23',
@@ -26676,7 +27897,7 @@ describe('custom utilities', () => {
     test('resolving any arbitrary values', async () => {
       let input = css`
         @utility tab-* {
-          tab-size: --value([ *]);
+          tab-size: --value([*]);
         }
 
         @tailwind utilities;
@@ -27134,7 +28355,7 @@ describe('custom utilities', () => {
 
         @utility example-* {
           font-size: --value(--text);
-          line-height: --value(--text- * --line-height);
+          line-height: --value(--text-* --line-height);
           line-height: --modifier(number);
         }
 

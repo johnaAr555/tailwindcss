@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it, test } from 'vitest'
-import { compile, Polyfills } from '.'
+import { compile, Features, Polyfills } from '.'
 import type { PluginAPI } from './compat/plugin-api'
 import plugin from './plugin'
 import { compileCss, optimizeCss, run } from './test-utils/run'
@@ -126,11 +126,12 @@ describe('compiling CSS', () => {
         {
           async loadStylesheet(id) {
             return {
+              path: '',
+              base: '',
               content: fs.readFileSync(
                 path.resolve(__dirname, '..', id === 'tailwindcss' ? 'index.css' : id),
                 'utf-8',
               ),
-              base: '',
             }
           },
         },
@@ -285,6 +286,88 @@ describe('@apply', () => {
     )
   })
 
+  it('@apply referencing theme values without `@tailwind utilities` or `@reference` should error', () => {
+    return expect(() =>
+      compileCss(css`
+        .foo {
+          @apply p-2;
+        }
+      `),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[Error: Cannot apply unknown utility class \`p-2\`. Are you using CSS modules or similar and missing \`@reference\`? https://tailwindcss.com/docs/functions-and-directives#reference-directive]`,
+    )
+  })
+
+  it('@apply referencing theme values with `@tailwind utilities` should work', async () => {
+    return expect(
+      await compileCss(
+        css`
+          @import 'tailwindcss';
+
+          .foo {
+            @apply p-2;
+          }
+        `,
+        [],
+        {
+          async loadStylesheet() {
+            return {
+              path: '',
+              base: '/',
+              content: css`
+                @theme {
+                  --spacing: 0.25rem;
+                }
+                @tailwind utilities;
+              `,
+            }
+          },
+        },
+      ),
+    ).toMatchInlineSnapshot(`
+      ":root, :host {
+        --spacing: .25rem;
+      }
+
+      .foo {
+        padding: calc(var(--spacing) * 2);
+      }"
+    `)
+  })
+
+  it('@apply referencing theme values with `@reference` should work', async () => {
+    return expect(
+      await compileCss(
+        css`
+          @reference "style.css";
+
+          .foo {
+            @apply p-2;
+          }
+        `,
+        [],
+        {
+          async loadStylesheet() {
+            return {
+              path: '',
+              base: '/',
+              content: css`
+                @theme {
+                  --spacing: 0.25rem;
+                }
+                @tailwind utilities;
+              `,
+            }
+          },
+        },
+      ),
+    ).toMatchInlineSnapshot(`
+      ".foo {
+        padding: calc(var(--spacing, .25rem) * 2);
+      }"
+    `)
+  })
+
   it('should replace @apply with the correct result', async () => {
     expect(
       await compileCss(css`
@@ -401,6 +484,7 @@ describe('@apply', () => {
         {
           async loadStylesheet() {
             return {
+              path: '',
               base: '/bar.css',
               content: css`
                 .foo {
@@ -443,7 +527,6 @@ describe('@apply', () => {
       .foo, .bar {
         --tw-content: "b";
         content: var(--tw-content);
-        content: var(--tw-content);
       }
 
       @property --tw-content {
@@ -454,9 +537,9 @@ describe('@apply', () => {
     `)
   })
 
-  it('should error when using @apply with a utility that does not exist', () => {
-    return expect(
-      compileCss(css`
+  it('should error when using @apply with a utility that does not exist', async () => {
+    await expect(
+      compile(css`
         @tailwind utilities;
 
         .foo {
@@ -464,21 +547,24 @@ describe('@apply', () => {
         }
       `),
     ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: Cannot apply unknown utility class: bg-not-found]`,
+      `[Error: Cannot apply unknown utility class \`bg-not-found\`. Are you using CSS modules or similar and missing \`@reference\`? https://tailwindcss.com/docs/functions-and-directives#reference-directive]`,
     )
   })
 
-  it('should error when using @apply with a variant that does not exist', () => {
-    return expect(
-      compileCss(css`
+  it('should error when using @apply with a variant that does not exist', async () => {
+    await expect(
+      compile(css`
         @tailwind utilities;
+        @theme {
+          --color-red-500: red;
+        }
 
         .foo {
-          @apply hocus:bg-red-500;
+          @apply hocus:hover:pocus:bg-red-500;
         }
       `),
     ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: Cannot apply unknown utility class: hocus:bg-red-500]`,
+      `[Error: Cannot apply utility class \`hocus:hover:pocus:bg-red-500\` because the \`hocus\` and \`pocus\` variants do not exist.]`,
     )
   })
 
@@ -579,7 +665,7 @@ describe('@apply', () => {
   })
 
   // https://github.com/tailwindlabs/tailwindcss/issues/16935
-  it('should now swallow @utility declarations when @apply is used in nested rules', async () => {
+  it('should not swallow @utility declarations when @apply is used in nested rules', async () => {
     expect(
       await compileCss(
         css`
@@ -608,6 +694,119 @@ describe('@apply', () => {
       }
 
       .ignore-me div {
+        display: flex;
+      }"
+    `)
+  })
+
+  // https://github.com/tailwindlabs/tailwindcss/issues/17924
+  it('should correctly apply nested usages of @apply when one @utility applies another', async () => {
+    expect(
+      await compileCss(
+        css`
+          @theme {
+            --color-green-500: green;
+            --color-red-500: red;
+            --color-indigo-500: indigo;
+          }
+
+          @tailwind utilities;
+
+          @utility test2 {
+            @apply test;
+          }
+
+          @utility test {
+            @apply bg-green-500;
+            &:hover {
+              @apply bg-red-500;
+            }
+            &:disabled {
+              @apply bg-indigo-500;
+            }
+          }
+
+          .foo {
+            @apply test2;
+          }
+        `,
+        ['foo', 'test', 'test2'],
+      ),
+    ).toMatchInlineSnapshot(`
+      ":root, :host {
+        --color-green-500: green;
+        --color-red-500: red;
+        --color-indigo-500: indigo;
+      }
+
+      .test {
+        background-color: var(--color-green-500);
+      }
+
+      .test:hover {
+        background-color: var(--color-red-500);
+      }
+
+      .test:disabled {
+        background-color: var(--color-indigo-500);
+      }
+
+      .test2 {
+        background-color: var(--color-green-500);
+      }
+
+      .test2:hover {
+        background-color: var(--color-red-500);
+      }
+
+      .test2:disabled {
+        background-color: var(--color-indigo-500);
+      }
+
+      .foo {
+        background-color: var(--color-green-500);
+      }
+
+      .foo:hover {
+        background-color: var(--color-red-500);
+      }
+
+      .foo:disabled {
+        background-color: var(--color-indigo-500);
+      }"
+    `)
+  })
+
+  // https://github.com/tailwindlabs/tailwindcss/issues/18400
+  it('should ignore the design systems `important` flag when using @apply', async () => {
+    expect(
+      await compileCss(
+        css`
+          @import 'tailwindcss/utilities' important;
+          .flex-explicitly-important {
+            @apply flex!;
+          }
+          .flex-not-important {
+            @apply flex;
+          }
+        `,
+        ['flex'],
+        {
+          async loadStylesheet(_, base) {
+            return {
+              content: '@tailwind utilities;',
+              base,
+              path: '',
+            }
+          },
+        },
+      ),
+    ).toMatchInlineSnapshot(`
+      ".flex, .flex-explicitly-important {
+        display: flex !important;
+      }
+
+      .flex-not-important {
         display: flex;
       }"
     `)
@@ -2320,6 +2519,8 @@ describe('Parsing theme values from CSS', () => {
         {
           async loadStylesheet() {
             return {
+              path: '',
+              base: '',
               content: css`
                 @theme {
                   --color-tomato: #e10c04;
@@ -2329,7 +2530,6 @@ describe('Parsing theme values from CSS', () => {
 
                 @tailwind utilities;
               `,
-              base: '',
             }
           },
         },
@@ -2407,6 +2607,8 @@ describe('Parsing theme values from CSS', () => {
         {
           async loadStylesheet() {
             return {
+              path: '',
+              base: '',
               content: css`
                 @theme {
                   --color-tomato: #e10c04;
@@ -2416,7 +2618,6 @@ describe('Parsing theme values from CSS', () => {
 
                 @tailwind utilities;
               `,
-              base: '',
             }
           },
         },
@@ -2704,6 +2905,8 @@ describe('Parsing theme values from CSS', () => {
       {
         loadModule: async () => {
           return {
+            path: '',
+            base: '/root',
             module: plugin(({}) => {}, {
               theme: {
                 extend: {
@@ -2714,7 +2917,6 @@ describe('Parsing theme values from CSS', () => {
                 },
               },
             }),
-            base: '/root',
           }
         },
       },
@@ -2750,6 +2952,8 @@ describe('Parsing theme values from CSS', () => {
       {
         loadModule: async () => {
           return {
+            path: '',
+            base: '/root',
             module: {
               theme: {
                 extend: {
@@ -2760,7 +2964,6 @@ describe('Parsing theme values from CSS', () => {
                 },
               },
             },
-            base: '/root',
           }
         },
       },
@@ -2839,10 +3042,11 @@ describe('plugins', () => {
         `,
         {
           loadModule: async () => ({
+            path: '',
+            base: '/root',
             module: ({ addVariant }: PluginAPI) => {
               addVariant('hocus', '&:hover, &:focus')
             },
-            base: '/root',
           }),
         },
       ),
@@ -2857,10 +3061,11 @@ describe('plugins', () => {
         `,
         {
           loadModule: async () => ({
+            path: '',
+            base: '/root',
             module: ({ addVariant }: PluginAPI) => {
               addVariant('hocus', '&:hover, &:focus')
             },
-            base: '/root',
           }),
         },
       ),
@@ -2877,10 +3082,11 @@ describe('plugins', () => {
         `,
         {
           loadModule: async () => ({
+            path: '',
+            base: '/root',
             module: ({ addVariant }: PluginAPI) => {
               addVariant('hocus', '&:hover, &:focus')
             },
-            base: '/root',
           }),
         },
       ),
@@ -2899,6 +3105,8 @@ describe('plugins', () => {
       `,
       {
         loadModule: async () => ({
+          path: '',
+          base: '/root',
           module: plugin.withOptions((options) => {
             expect(options).toEqual({
               color: 'red',
@@ -2912,7 +3120,6 @@ describe('plugins', () => {
               })
             }
           }),
-          base: '/root',
         }),
       },
     )
@@ -2951,6 +3158,8 @@ describe('plugins', () => {
       `,
       {
         loadModule: async () => ({
+          path: '',
+          base: '/root',
           module: plugin.withOptions((options) => {
             expect(options).toEqual({
               'is-null': null,
@@ -2971,7 +3180,6 @@ describe('plugins', () => {
 
             return () => {}
           }),
-          base: '/root',
         }),
       },
     )
@@ -2991,6 +3199,8 @@ describe('plugins', () => {
         `,
         {
           loadModule: async () => ({
+            path: '',
+            base: '/root',
             module: plugin.withOptions((options) => {
               return ({ addUtilities }) => {
                 addUtilities({
@@ -3000,7 +3210,6 @@ describe('plugins', () => {
                 })
               }
             }),
-            base: '/root',
           }),
         },
       ),
@@ -3029,6 +3238,8 @@ describe('plugins', () => {
         `,
         {
           loadModule: async () => ({
+            path: '',
+            base: '/root',
             module: plugin(({ addUtilities }) => {
               addUtilities({
                 '.text-primary': {
@@ -3036,7 +3247,6 @@ describe('plugins', () => {
                 },
               })
             }),
-            base: '/root',
           }),
         },
       ),
@@ -3054,7 +3264,11 @@ describe('plugins', () => {
           }
         `,
         {
-          loadModule: async () => ({ module: plugin(() => {}), base: '/root' }),
+          loadModule: async () => ({
+            path: '',
+            base: '/root',
+            module: plugin(() => {}),
+          }),
         },
       ),
     ).rejects.toThrowErrorMatchingInlineSnapshot(
@@ -3075,7 +3289,11 @@ describe('plugins', () => {
           }
         `,
         {
-          loadModule: async () => ({ module: plugin(() => {}), base: '/root' }),
+          loadModule: async () => ({
+            path: '',
+            base: '/root',
+            module: plugin(() => {}),
+          }),
         },
       ),
     ).rejects.toThrowErrorMatchingInlineSnapshot(`
@@ -3099,10 +3317,11 @@ describe('plugins', () => {
       `,
       {
         loadModule: async () => ({
+          path: '',
+          base: '/root',
           module: ({ addVariant }: PluginAPI) => {
             addVariant('hocus', '&:hover, &:focus')
           },
-          base: '/root',
         }),
       },
     )
@@ -3131,10 +3350,11 @@ describe('plugins', () => {
       `,
       {
         loadModule: async () => ({
+          path: '',
+          base: '/root',
           module: ({ addVariant }: PluginAPI) => {
             addVariant('hocus', ['&:hover', '&:focus'])
           },
-          base: '/root',
         }),
       },
     )
@@ -3164,13 +3384,14 @@ describe('plugins', () => {
       `,
       {
         loadModule: async () => ({
+          path: '',
+          base: '/root',
           module: ({ addVariant }: PluginAPI) => {
             addVariant('hocus', {
               '&:hover': '@slot',
               '&:focus': '@slot',
             })
           },
-          base: '/root',
         }),
       },
     )
@@ -3199,6 +3420,8 @@ describe('plugins', () => {
       `,
       {
         loadModule: async () => ({
+          path: '',
+          base: '/root',
           module: ({ addVariant }: PluginAPI) => {
             addVariant('hocus', {
               '@media (hover: hover)': {
@@ -3207,7 +3430,6 @@ describe('plugins', () => {
               '&:focus': '@slot',
             })
           },
-          base: '/root',
         }),
       },
     )
@@ -3248,6 +3470,8 @@ describe('plugins', () => {
       `,
       {
         loadModule: async () => ({
+          path: '',
+          base: '/root',
           module: ({ addVariant }: PluginAPI) => {
             addVariant('hocus', {
               '&': {
@@ -3257,7 +3481,6 @@ describe('plugins', () => {
               },
             })
           },
-          base: '/root',
         }),
       },
     )
@@ -3286,10 +3509,11 @@ describe('plugins', () => {
       `,
       {
         loadModule: async () => ({
+          path: '',
+          base: '/root',
           module: ({ addVariant }: PluginAPI) => {
             addVariant('dark', '&:is([data-theme=dark] *)')
           },
-          base: '/root',
         }),
       },
     )
@@ -3544,8 +3768,35 @@ describe('@custom-variant', () => {
         @custom-variant foo:bar (&:hover, &:focus);
       `),
     ).rejects.toThrowErrorMatchingInlineSnapshot(
-      `[Error: \`@custom-variant foo:bar\` defines an invalid variant name. Variants should only contain alphanumeric, dashes or underscore characters.]`,
+      `[Error: \`@custom-variant foo:bar\` defines an invalid variant name. Variants should only contain alphanumeric, dashes, or underscore characters and start with a lowercase letter or number.]`,
     )
+  })
+
+  test.each([
+    // Cannot be a dash on its own
+    [`@custom-variant - (&);`],
+    // Cannot be multiple dashes on their own
+    [`@custom-variant --- (&);`],
+    // Cannot be an underscore on its own
+    [`@custom-variant _ (&);`],
+    // Cannot be multiple underscores on their own
+    [`@custom-variant ___ (&);`],
+
+    // Cannot start with a dash
+    [`@custom-variant -foo (&);`],
+    [`@custom-variant --foo (&);`],
+    // Cannot start with an underscore
+    [`@custom-variant _foo (&);`],
+    [`@custom-variant __foo (&);`],
+
+    // Cannot end with a dash
+    [`@custom-variant foo- (&);`],
+    [`@custom-variant foo-- (&);`],
+    // Cannot end with an underscore
+    [`@custom-variant foo_ (&);`],
+    [`@custom-variant foo__ (&);`],
+  ])('@custom-variant must have a valid name', (input) => {
+    return expect(compileCss(input)).rejects.toThrowError()
   })
 
   test('@custom-variant must not container special characters', () => {
@@ -4092,6 +4343,180 @@ describe('@custom-variant', () => {
       }"
     `)
   })
+
+  test('@custom-variant can reuse existing @variant in the definition', async () => {
+    expect(
+      await compileCss(
+        css`
+          @custom-variant hocus {
+            @variant hover {
+              @variant focus {
+                @slot;
+              }
+            }
+          }
+
+          @tailwind utilities;
+        `,
+        ['hocus:flex'],
+      ),
+    ).toMatchInlineSnapshot(`
+      "@media (hover: hover) {
+        .hocus\\:flex:hover:focus {
+          display: flex;
+        }
+      }"
+    `)
+  })
+
+  test('@custom-variant can reuse @custom-variant that is defined later', async () => {
+    expect(
+      await compileCss(
+        css`
+          @custom-variant hocus {
+            @variant custom-hover {
+              @variant focus {
+                @slot;
+              }
+            }
+          }
+
+          @custom-variant custom-hover (&:hover);
+
+          @tailwind utilities;
+        `,
+        ['hocus:flex'],
+      ),
+    ).toMatchInlineSnapshot(`
+      ".hocus\\:flex:hover:focus {
+        display: flex;
+      }"
+    `)
+  })
+
+  test('@custom-variant can reuse existing @variant that is overwritten later', async () => {
+    expect(
+      await compileCss(
+        css`
+          @custom-variant hocus {
+            @variant hover {
+              @variant focus {
+                @slot;
+              }
+            }
+          }
+
+          @custom-variant hover (&:hover);
+
+          @tailwind utilities;
+        `,
+        ['hocus:flex'],
+      ),
+    ).toMatchInlineSnapshot(`
+      ".hocus\\:flex:hover:focus {
+        display: flex;
+      }"
+    `)
+  })
+
+  test('@custom-variant cannot use @variant that eventually results in a circular dependency', async () => {
+    return expect(() =>
+      compileCss(
+        css`
+          @custom-variant custom-variant {
+            @variant foo {
+              @slot;
+            }
+          }
+
+          @custom-variant foo {
+            @variant hover {
+              @variant bar {
+                @slot;
+              }
+            }
+          }
+
+          @custom-variant bar {
+            @variant focus {
+              @variant baz {
+                @slot;
+              }
+            }
+          }
+
+          @custom-variant baz {
+            @variant active {
+              @variant foo {
+                @slot;
+              }
+            }
+          }
+
+          @tailwind utilities;
+        `,
+        ['foo:flex'],
+      ),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(`
+      [Error: Circular dependency detected in custom variants:
+
+      @custom-variant custom-variant {
+        @variant foo { … }
+      }
+      @custom-variant foo { /* ← */
+        @variant bar { … }
+      }
+      @custom-variant bar {
+        @variant baz { … }
+      }
+      @custom-variant baz {
+        @variant foo { … }
+      }
+      ]
+    `)
+  })
+
+  test('@custom-variant setup that results in a circular dependency error can be solved', async () => {
+    expect(
+      await compileCss(
+        css`
+          @custom-variant foo {
+            @variant hover {
+              @variant bar {
+                @slot;
+              }
+            }
+          }
+
+          @custom-variant bar {
+            @variant focus {
+              @variant baz {
+                @slot;
+              }
+            }
+          }
+
+          @custom-variant baz {
+            @variant active {
+              @variant foo {
+                @slot;
+              }
+            }
+          }
+
+          /* Break the circle */
+          @custom-variant foo ([data-broken-circle] &);
+
+          @tailwind utilities;
+        `,
+        ['baz:flex'],
+      ),
+    ).toMatchInlineSnapshot(`
+      "[data-broken-circle] .baz\\:flex:active {
+        display: flex;
+      }"
+    `)
+  })
 })
 
 describe('@utility', () => {
@@ -4129,6 +4554,30 @@ describe('@utility', () => {
       `[Error: \`@utility 💨\` defines an invalid utility name. Utilities should be alphanumeric and start with a lowercase letter.]`,
     )
   })
+
+  test('A functional @utility must end in -*', () => {
+    return expect(
+      compileCss(css`
+        @utility foo* {
+          color: red;
+        }
+      `),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[Error: \`@utility foo*\` defines an invalid utility name. A functional utility must end in \`-*\`.]`,
+    )
+  })
+
+  test('Only the last part of a functional @utility can be dynamic', () => {
+    return expect(
+      compileCss(css`
+        @utility my-*-utility {
+          color: red;
+        }
+      `),
+    ).rejects.toThrowErrorMatchingInlineSnapshot(
+      `[Error: \`@utility my-*-utility\` defines an invalid utility name. The dynamic portion marked by \`-*\` must appear once at the end.]`,
+    )
+  })
 })
 
 test('addBase', async () => {
@@ -4142,6 +4591,8 @@ test('addBase', async () => {
     `,
     {
       loadModule: async () => ({
+        path: '',
+        base: '/root',
         module: ({ addBase }: PluginAPI) => {
           addBase({
             body: {
@@ -4149,7 +4600,6 @@ test('addBase', async () => {
             },
           })
         },
-        base: '/root',
       }),
     },
   )
@@ -4172,7 +4622,7 @@ test('addBase', async () => {
 })
 
 it("should error when `layer(…)` is used, but it's not the first param", async () => {
-  expect(async () => {
+  await expect(async () => {
     return await compileCss(
       css`
         @import './bar.css' supports(display: grid) layer(utilities);
@@ -4181,6 +4631,7 @@ it("should error when `layer(…)` is used, but it's not the first param", async
       {
         async loadStylesheet() {
           return {
+            path: '',
             base: '/bar.css',
             content: css`
               .foo {
@@ -4198,9 +4649,11 @@ it("should error when `layer(…)` is used, but it's not the first param", async
 
 describe('`@reference "…" imports`', () => {
   test('recursively removes styles', async () => {
-    let loadStylesheet = async (id: string, base: string) => {
+    let loadStylesheet = async (id: string, base = '/root/foo') => {
       if (id === './foo/baz.css') {
         return {
+          base,
+          path: '',
           content: css`
             .foo {
               color: red;
@@ -4213,14 +4666,14 @@ describe('`@reference "…" imports`', () => {
             }
             @custom-variant hocus (&:hover, &:focus);
           `,
-          base: '/root/foo',
         }
       }
       return {
+        path: '',
+        base: '/root/foo',
         content: css`
           @import './foo/baz.css';
         `,
-        base: '/root/foo',
       }
     }
 
@@ -4246,22 +4699,24 @@ describe('`@reference "…" imports`', () => {
   })
 
   test('does not generate utilities', async () => {
-    let loadStylesheet = async (id: string, base: string) => {
+    let loadStylesheet = async (id: string, base = '/root/foo') => {
       if (id === './foo/baz.css') {
         return {
+          base,
+          path: '',
           content: css`
             @layer utilities {
               @tailwind utilities;
             }
           `,
-          base: '/root/foo',
         }
       }
       return {
+        path: '',
+        base: '/root/foo',
         content: css`
           @import './foo/baz.css';
         `,
-        base: '/root/foo',
       }
     }
 
@@ -4311,6 +4766,8 @@ describe('`@reference "…" imports`', () => {
         ['animate-spin', 'match-utility-initial', 'match-components-initial'],
         {
           loadModule: async () => ({
+            path: '',
+            base: '/root',
             module: ({
               addBase,
               addUtilities,
@@ -4329,7 +4786,7 @@ describe('`@reference "…" imports`', () => {
               })
               matchUtilities(
                 {
-                  'match-utility': (value) => ({
+                  'match-utility': (_value) => ({
                     '@keyframes match-utilities': { '100%': { opacity: '0' } },
                   }),
                 },
@@ -4337,14 +4794,13 @@ describe('`@reference "…" imports`', () => {
               )
               matchComponents(
                 {
-                  'match-components': (value) => ({
+                  'match-components': (_value) => ({
                     '@keyframes match-components': { '100%': { opacity: '0' } },
                   }),
                 },
                 { values: { initial: 'initial' } },
               )
             },
-            base: '/root',
           }),
         },
       ),
@@ -4362,26 +4818,30 @@ describe('`@reference "…" imports`', () => {
   })
 
   test('emits CSS variable fallback and keyframes defined inside @reference-ed files', async () => {
-    let loadStylesheet = async (id: string, base: string) => {
+    let loadStylesheet = async (id: string, base = '/root') => {
       switch (id) {
         case './one.css': {
           return {
+            base,
+            path: '',
             content: css`
               @import './two.css' layer(two);
             `,
-            base: '/root',
           }
         }
         case './two.css': {
           return {
+            base,
+            path: '',
             content: css`
               @import './three.css' layer(three);
             `,
-            base: '/root',
           }
         }
         case './three.css': {
           return {
+            base,
+            path: '',
             content: css`
               .foo {
                 color: red;
@@ -4400,10 +4860,11 @@ describe('`@reference "…" imports`', () => {
                 }
               }
             `,
-            base: '/root',
           }
         }
       }
+
+      throw new Error('unreachable')
     }
 
     await expect(
@@ -4438,6 +4899,8 @@ describe('`@reference "…" imports`', () => {
   test('supports `@import "…" reference` syntax', async () => {
     let loadStylesheet = async () => {
       return {
+        path: '',
+        base: '/root/foo',
         content: css`
           .foo {
             color: red;
@@ -4450,7 +4913,6 @@ describe('`@reference "…" imports`', () => {
           }
           @custom-variant hocus (&:hover, &:focus);
         `,
-        base: '/root/foo',
       }
     }
 
@@ -4764,6 +5226,36 @@ describe('`color-mix(…)` polyfill', () => {
     `)
   })
 
+  it('creates an inlined variable version of the color-mix(…) usages when it resolves to a var(…) containing another theme variable', async () => {
+    await expect(
+      compileCss(
+        css`
+          @theme {
+            --color-red: var(--color-red-500);
+            --color-red-500: oklch(63.7% 0.237 25.331);
+          }
+          @tailwind utilities;
+        `,
+        ['text-red/50'],
+      ),
+    ).resolves.toMatchInlineSnapshot(`
+      ":root, :host {
+        --color-red: var(--color-red-500);
+        --color-red-500: oklch(63.7% .237 25.331);
+      }
+
+      .text-red\\/50 {
+        color: #fb2c3680;
+      }
+
+      @supports (color: color-mix(in lab, red, red)) {
+        .text-red\\/50 {
+          color: color-mix(in oklab, var(--color-red) 50%, transparent);
+        }
+      }"
+    `)
+  })
+
   it('works for color values in the first and second position', async () => {
     await expect(
       compileCss(
@@ -4971,6 +5463,34 @@ describe('`color-mix(…)` polyfill', () => {
     `)
   })
 
+  it('uses the first color value as the fallback when the `color-mix(…)` function contains theme variables that resolves to other variables', async () => {
+    await expect(
+      compileCss(
+        css`
+          @tailwind utilities;
+          @theme {
+            --color-red: var(--my-red);
+          }
+        `,
+        ['text-red/50'],
+      ),
+    ).resolves.toMatchInlineSnapshot(`
+      ".text-red\\/50 {
+        color: var(--color-red);
+      }
+
+      @supports (color: color-mix(in lab, red, red)) {
+        .text-red\\/50 {
+          color: color-mix(in oklab, var(--color-red) 50%, transparent);
+        }
+      }
+
+      :root, :host {
+        --color-red: var(--my-red);
+      }"
+    `)
+  })
+
   it('uses the first color value of the inner most `color-mix(…)` function as the fallback when nested `color-mix(…)` function all contain non-theme variables', async () => {
     await expect(
       compileCss(
@@ -5044,6 +5564,153 @@ describe('`color-mix(…)` polyfill', () => {
         .text-red-500\\/\\(--my-half\\) {
           color: color-mix(in oklab, var(--color-red-500) var(--my-half), transparent);
         }
+      }"
+    `)
+  })
+
+  it('does not delete theme variables from the output', async () => {
+    await expect(
+      compileCss(
+        css`
+          @layer theme {
+            @theme {
+              --color-red-500: red;
+              --shadow-xl: 0 6px 18px 4px color-mix(in oklab, var(--color-red-500) 25%, transparent);
+              --opacity-disabled: 50%;
+            }
+          }
+          @tailwind utilities;
+        `,
+        ['text-red-500', 'shadow-xl', 'opacity-disabled'],
+      ),
+    ).resolves.toMatchInlineSnapshot(`
+      "@layer properties {
+        @supports (((-webkit-hyphens: none)) and (not (margin-trim: inline))) or ((-moz-orient: inline) and (not (color: rgb(from red r g b)))) {
+          *, :before, :after, ::backdrop {
+            --tw-shadow: 0 0 #0000;
+            --tw-shadow-color: initial;
+            --tw-shadow-alpha: 100%;
+            --tw-inset-shadow: 0 0 #0000;
+            --tw-inset-shadow-color: initial;
+            --tw-inset-shadow-alpha: 100%;
+            --tw-ring-color: initial;
+            --tw-ring-shadow: 0 0 #0000;
+            --tw-inset-ring-color: initial;
+            --tw-inset-ring-shadow: 0 0 #0000;
+            --tw-ring-inset: initial;
+            --tw-ring-offset-width: 0px;
+            --tw-ring-offset-color: #fff;
+            --tw-ring-offset-shadow: 0 0 #0000;
+          }
+        }
+      }
+
+      @layer theme {
+        :root, :host {
+          --color-red-500: red;
+          --opacity-disabled: 50%;
+        }
+      }
+
+      .text-red-500 {
+        color: var(--color-red-500);
+      }
+
+      .opacity-disabled {
+        opacity: var(--opacity-disabled);
+      }
+
+      .shadow-xl {
+        --tw-shadow: 0 6px 18px 4px var(--tw-shadow-color, #ff000040);
+      }
+
+      @supports (color: color-mix(in lab, red, red)) {
+        .shadow-xl {
+          --tw-shadow: 0 6px 18px 4px var(--tw-shadow-color, color-mix(in oklab, var(--color-red-500) 25%, transparent));
+        }
+      }
+
+      .shadow-xl {
+        box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+      }
+
+      @property --tw-shadow {
+        syntax: "*";
+        inherits: false;
+        initial-value: 0 0 #0000;
+      }
+
+      @property --tw-shadow-color {
+        syntax: "*";
+        inherits: false
+      }
+
+      @property --tw-shadow-alpha {
+        syntax: "<percentage>";
+        inherits: false;
+        initial-value: 100%;
+      }
+
+      @property --tw-inset-shadow {
+        syntax: "*";
+        inherits: false;
+        initial-value: 0 0 #0000;
+      }
+
+      @property --tw-inset-shadow-color {
+        syntax: "*";
+        inherits: false
+      }
+
+      @property --tw-inset-shadow-alpha {
+        syntax: "<percentage>";
+        inherits: false;
+        initial-value: 100%;
+      }
+
+      @property --tw-ring-color {
+        syntax: "*";
+        inherits: false
+      }
+
+      @property --tw-ring-shadow {
+        syntax: "*";
+        inherits: false;
+        initial-value: 0 0 #0000;
+      }
+
+      @property --tw-inset-ring-color {
+        syntax: "*";
+        inherits: false
+      }
+
+      @property --tw-inset-ring-shadow {
+        syntax: "*";
+        inherits: false;
+        initial-value: 0 0 #0000;
+      }
+
+      @property --tw-ring-inset {
+        syntax: "*";
+        inherits: false
+      }
+
+      @property --tw-ring-offset-width {
+        syntax: "<length>";
+        inherits: false;
+        initial-value: 0;
+      }
+
+      @property --tw-ring-offset-color {
+        syntax: "*";
+        inherits: false;
+        initial-value: #fff;
+      }
+
+      @property --tw-ring-offset-shadow {
+        syntax: "*";
+        inherits: false;
+        initial-value: 0 0 #0000;
       }"
     `)
   })
@@ -5169,5 +5836,147 @@ describe('`@property` polyfill', async () => {
         initial-value: red;
       }"
     `)
+  })
+})
+
+describe('feature detection', () => {
+  test('using `@tailwind utilities`', async () => {
+    let compiler = await compile(css`
+      @tailwind utilities;
+    `)
+
+    expect(compiler.features & Features.Utilities).toBeTruthy()
+  })
+
+  test('using `@apply`', async () => {
+    let compiler = await compile(css`
+      .foo {
+        @apply underline;
+      }
+    `)
+
+    expect(compiler.features & Features.AtApply).toBeTruthy()
+  })
+
+  test('using `@import`', async () => {
+    let compiler = await compile(
+      css`
+        @import 'tailwindcss/preflight';
+      `,
+      { loadStylesheet: async (_, base) => ({ base, path: '', content: '' }) },
+    )
+
+    expect(compiler.features & Features.AtImport).toBeTruthy()
+  })
+
+  test('using `@reference`', async () => {
+    let compiler = await compile(
+      css`
+        @import 'tailwindcss/preflight';
+      `,
+      { loadStylesheet: async (_, base) => ({ base, path: '', content: '' }) },
+    )
+
+    // There's little difference between `@reference` and `@import` on a feature
+    // level as it's just like an import but with side-effect behavior.
+    //
+    // It's really just shorthand for `@import "…" reference;`
+    expect(compiler.features & Features.AtImport).toBeTruthy()
+  })
+
+  test('using `theme(…)`', async () => {
+    let compiler = await compile(
+      css`
+        @theme {
+          --color-red: #f00;
+        }
+
+        .foo {
+          color: theme(--color-red);
+        }
+      `,
+      { loadStylesheet: async (_, base) => ({ base, path: '', content: '' }) },
+    )
+
+    expect(compiler.features & Features.ThemeFunction).toBeTruthy()
+  })
+
+  test('using `@plugin`', async () => {
+    let compiler = await compile(
+      css`
+        @plugin "./some-plugin.js";
+      `,
+      { loadModule: async (_, base) => ({ base, path: '', module: () => {} }) },
+    )
+
+    expect(compiler.features & Features.JsPluginCompat).toBeTruthy()
+  })
+
+  test('using `@config`', async () => {
+    let compiler = await compile(
+      css`
+        @config "./some-config.js";
+      `,
+      { loadModule: async (_, base) => ({ base, path: '', module: {} }) },
+    )
+
+    expect(compiler.features & Features.JsPluginCompat).toBeTruthy()
+  })
+
+  test('using `@variant`', async () => {
+    let compiler = await compile(css`
+      .foo {
+        @variant dark {
+          color: red;
+        }
+      }
+    `)
+
+    expect(compiler.features & Features.Variants).toBeTruthy()
+  })
+
+  test('legacy `@variant` syntax does not trigger the variant feature', async () => {
+    let compiler = await compile(css`
+      @variant dark (&:is(.dark, .dark *));
+    `)
+
+    expect(compiler.features & Features.Variants).toBeFalsy()
+  })
+
+  test('`@tailwind utilities` is ignored inside `@reference`', async () => {
+    let compiler = await compile(
+      css`
+        @reference "tailwindcss/utilities";
+      `,
+      {
+        async loadStylesheet(_id, base) {
+          return {
+            base,
+            path: '',
+            content: css`
+              @tailwind utilities;
+            `,
+          }
+        },
+      },
+    )
+
+    // We see @tailwind utilities but because of @reference it is ignored
+    expect(compiler.features & Features.AtImport).toBeTruthy()
+    expect(compiler.features & Features.Utilities).toBeFalsy()
+  })
+
+  test('using `@theme`', async () => {
+    let compiler = await compile(css`
+      @theme {
+        --tracking-narrower: -0.02em;
+      }
+    `)
+
+    // We see @theme
+    expect(compiler.features & Features.AtTheme).toBeTruthy()
+
+    // And this produces no output because no other CSS is present
+    expect(compiler.build([])).toEqual('')
   })
 })

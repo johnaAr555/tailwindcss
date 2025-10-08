@@ -2,12 +2,6 @@ import * as tailwindcss from 'tailwindcss'
 import * as assets from './assets'
 import { Instrumentation } from './instrumentation'
 
-// Warn users about using the browser build in production as early as possible.
-// It can take time for the script to do its work so this must be at the top.
-console.warn(
-  'The browser build of Tailwind CSS should not be used in production. To use Tailwind CSS in production, use the Tailwind CLI, Vite plugin, or PostCSS plugin: https://tailwindcss.com/docs/installation',
-)
-
 /**
  * The type used by `<style>` tags that contain input CSS.
  */
@@ -116,6 +110,7 @@ async function loadStylesheet(id: string, base: string) {
   function load() {
     if (id === 'tailwindcss') {
       return {
+        path: 'virtual:tailwindcss/index.css',
         base,
         content: assets.css.index,
       }
@@ -125,6 +120,7 @@ async function loadStylesheet(id: string, base: string) {
       id === './preflight.css'
     ) {
       return {
+        path: 'virtual:tailwindcss/preflight.css',
         base,
         content: assets.css.preflight,
       }
@@ -134,6 +130,7 @@ async function loadStylesheet(id: string, base: string) {
       id === './theme.css'
     ) {
       return {
+        path: 'virtual:tailwindcss/theme.css',
         base,
         content: assets.css.theme,
       }
@@ -143,6 +140,7 @@ async function loadStylesheet(id: string, base: string) {
       id === './utilities.css'
     ) {
       return {
+        path: 'virtual:tailwindcss/utilities.css',
         base,
         content: assets.css.utilities,
       }

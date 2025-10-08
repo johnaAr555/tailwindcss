@@ -1,4 +1,5 @@
-import { expect, it } from 'vitest'
+import { describe, expect, it, test } from 'vitest'
+import { __unstable__loadDesignSystem } from '.'
 import { buildDesignSystem } from './design-system'
 import { Theme } from './theme'
 import { Utilities } from './utilities'
@@ -1087,6 +1088,7 @@ it('should parse a utility with an implicit variable as the modifier using the s
   let utilities = new Utilities()
   utilities.functional('bg', () => [])
 
+  // Standard case (no underscores)
   expect(run('bg-red-500/(--value)', { utilities })).toMatchInlineSnapshot(`
     [
       {
@@ -1102,6 +1104,156 @@ it('should parse a utility with an implicit variable as the modifier using the s
           "fraction": null,
           "kind": "named",
           "value": "red-500",
+        },
+        "variants": [],
+      },
+    ]
+  `)
+
+  // Should preserve underscores
+  expect(run('bg-red-500/(--with_underscore)', { utilities })).toMatchInlineSnapshot(`
+    [
+      {
+        "important": false,
+        "kind": "functional",
+        "modifier": {
+          "kind": "arbitrary",
+          "value": "var(--with_underscore)",
+        },
+        "raw": "bg-red-500/(--with_underscore)",
+        "root": "bg",
+        "value": {
+          "fraction": null,
+          "kind": "named",
+          "value": "red-500",
+        },
+        "variants": [],
+      },
+    ]
+  `)
+
+  // Should remove underscores in fallback values
+  expect(run('bg-red-500/(--with_underscore,fallback_value)', { utilities }))
+    .toMatchInlineSnapshot(`
+      [
+        {
+          "important": false,
+          "kind": "functional",
+          "modifier": {
+            "kind": "arbitrary",
+            "value": "var(--with_underscore,fallback value)",
+          },
+          "raw": "bg-red-500/(--with_underscore,fallback_value)",
+          "root": "bg",
+          "value": {
+            "fraction": null,
+            "kind": "named",
+            "value": "red-500",
+          },
+          "variants": [],
+        },
+      ]
+    `)
+
+  // Should keep underscores in the CSS variable itself, but remove underscores
+  // in fallback values
+  expect(run('bg-(--a_b,c_d_var(--e_f,g_h))/(--i_j,k_l_var(--m_n,o_p))', { utilities }))
+    .toMatchInlineSnapshot(`
+    [
+      {
+        "important": false,
+        "kind": "functional",
+        "modifier": {
+          "kind": "arbitrary",
+          "value": "var(--i_j,k l var(--m_n,o p))",
+        },
+        "raw": "bg-(--a_b,c_d_var(--e_f,g_h))/(--i_j,k_l_var(--m_n,o_p))",
+        "root": "bg",
+        "value": {
+          "dataType": null,
+          "kind": "arbitrary",
+          "value": "var(--a_b,c d var(--e_f,g h))",
+        },
+        "variants": [],
+      },
+    ]
+  `)
+})
+
+it('should not parse an invalid arbitrary shorthand modifier', () => {
+  let utilities = new Utilities()
+  utilities.functional('bg', () => [])
+
+  // Completely empty
+  expect(run('bg-red-500/()', { utilities })).toMatchInlineSnapshot(`[]`)
+
+  // Invalid due to leading spaces
+  expect(run('bg-red-500/(_--)', { utilities })).toMatchInlineSnapshot(`[]`)
+  expect(run('bg-red-500/(_--x)', { utilities })).toMatchInlineSnapshot(`[]`)
+
+  // Invalid due to leading spaces
+  expect(run('bg-red-500/(_--)', { utilities })).toMatchInlineSnapshot(`[]`)
+  expect(run('bg-red-500/(_--x)', { utilities })).toMatchInlineSnapshot(`[]`)
+
+  // Invalid due to top-level `;` or `}` characters
+  expect(run('bg-red-500/(--x;--y)', { utilities })).toMatchInlineSnapshot(`[]`)
+  expect(run('bg-red-500/(--x:{foo:bar})', { utilities })).toMatchInlineSnapshot(`[]`)
+
+  // Valid, but ensuring that we didn't make an off-by-one error
+  expect(run('bg-red-500/(--x)', { utilities })).toMatchInlineSnapshot(`
+    [
+      {
+        "important": false,
+        "kind": "functional",
+        "modifier": {
+          "kind": "arbitrary",
+          "value": "var(--x)",
+        },
+        "raw": "bg-red-500/(--x)",
+        "root": "bg",
+        "value": {
+          "fraction": null,
+          "kind": "named",
+          "value": "red-500",
+        },
+        "variants": [],
+      },
+    ]
+  `)
+})
+
+it('should not parse an invalid arbitrary shorthand value', () => {
+  let utilities = new Utilities()
+  utilities.functional('bg', () => [])
+
+  // Completely empty
+  expect(run('bg-()', { utilities })).toMatchInlineSnapshot(`[]`)
+
+  // Invalid due to leading spaces
+  expect(run('bg-(_--)', { utilities })).toMatchInlineSnapshot(`[]`)
+  expect(run('bg-(_--x)', { utilities })).toMatchInlineSnapshot(`[]`)
+
+  // Invalid due to leading spaces
+  expect(run('bg-(_--)', { utilities })).toMatchInlineSnapshot(`[]`)
+  expect(run('bg-(_--x)', { utilities })).toMatchInlineSnapshot(`[]`)
+
+  // Invalid due to top-level `;` or `}` characters
+  expect(run('bg-(--x;--y)', { utilities })).toMatchInlineSnapshot(`[]`)
+  expect(run('bg-(--x:{foo:bar})', { utilities })).toMatchInlineSnapshot(`[]`)
+
+  // Valid, but ensuring that we didn't make an off-by-one error
+  expect(run('bg-(--x)', { utilities })).toMatchInlineSnapshot(`
+    [
+      {
+        "important": false,
+        "kind": "functional",
+        "modifier": null,
+        "raw": "bg-(--x)",
+        "root": "bg",
+        "value": {
+          "dataType": null,
+          "kind": "arbitrary",
+          "value": "var(--x)",
         },
         "variants": [],
       },
@@ -1286,6 +1438,36 @@ it('should parse a functional variant starting with @', () => {
             "value": {
               "kind": "named",
               "value": "lg",
+            },
+          },
+        ],
+      },
+    ]
+  `)
+})
+
+it('should parse a functional variant starting with @ that has a hyphen', () => {
+  let utilities = new Utilities()
+  utilities.static('flex', () => [])
+
+  let variants = new Variants()
+  variants.functional('@', () => {})
+
+  expect(run('@foo-bar:flex', { utilities, variants })).toMatchInlineSnapshot(`
+    [
+      {
+        "important": false,
+        "kind": "static",
+        "raw": "@foo-bar:flex",
+        "root": "flex",
+        "variants": [
+          {
+            "kind": "functional",
+            "modifier": null,
+            "root": "@",
+            "value": {
+              "kind": "named",
+              "value": "foo-bar",
             },
           },
         ],
@@ -1817,4 +1999,127 @@ it.each([
   variants.compound('group', Compounds.StyleRules, () => {})
 
   expect(run(rawCandidate, { utilities, variants })).toEqual([])
+})
+
+const candidates = [
+  // Arbitrary candidates
+  ['[color:red]', '[color:red]'],
+  ['[color:red]/50', '[color:red]/50'],
+  ['[color:red]/[0.5]', '[color:red]/[0.5]'],
+  ['[color:red]/50!', '[color:red]/50!'],
+  ['![color:red]/50', '[color:red]/50!'],
+  ['[color:red]/[0.5]!', '[color:red]/[0.5]!'],
+
+  // Static candidates
+  ['box-border', 'box-border'],
+  ['underline!', 'underline!'],
+  ['!underline', 'underline!'],
+  ['-inset-full', '-inset-full'],
+
+  // Functional candidates
+  ['bg-red-500', 'bg-red-500'],
+  ['bg-red-500/50', 'bg-red-500/50'],
+  ['bg-red-500/[0.5]', 'bg-red-500/[0.5]'],
+  ['bg-red-500!', 'bg-red-500!'],
+  ['!bg-red-500', 'bg-red-500!'],
+  ['bg-[#0088cc]/50', 'bg-[#0088cc]/50'],
+  ['bg-[#0088cc]/[0.5]', 'bg-[#0088cc]/[0.5]'],
+  ['bg-[#0088cc]!', 'bg-[#0088cc]!'],
+  ['!bg-[#0088cc]', 'bg-[#0088cc]!'],
+  ['bg-[var(--spacing)-1px]', 'bg-[var(--spacing)-1px]'],
+  ['bg-[var(--spacing)_-_1px]', 'bg-[var(--spacing)-1px]'],
+  ['bg-[var(--_spacing)]', 'bg-(--_spacing)'],
+  ['bg-(--_spacing)', 'bg-(--_spacing)'],
+  ['bg-[var(--\_spacing)]', 'bg-(--_spacing)'],
+  ['bg-(--\_spacing)', 'bg-(--_spacing)'],
+  ['bg-[-1px_-1px]', 'bg-[-1px_-1px]'],
+  ['p-[round(to-zero,1px)]', 'p-[round(to-zero,1px)]'],
+  ['w-1/2', 'w-1/2'],
+  ['p-[calc((100vw-theme(maxWidth.2xl))_/_2)]', 'p-[calc((100vw-theme(maxWidth.2xl))/2)]'],
+
+  // Keep spaces in strings
+  ['content-["hello_world"]', 'content-["hello_world"]'],
+  ['content-[____"hello_world"___]', 'content-["hello_world"]'],
+
+  // Do not escape underscores for url() and CSS variable in var()
+  ['bg-[no-repeat_url(/image_13.png)]', 'bg-[no-repeat_url(/image_13.png)]'],
+  [
+    'bg-[var(--spacing-0_5,_var(--spacing-1_5,_3rem))]',
+    'bg-(--spacing-0_5,var(--spacing-1_5,3rem))',
+  ],
+
+  // Normalize whitespace in arbitrary properties
+  ['[display:flex]', '[display:flex]'],
+  ['[display:_flex]', '[display:flex]'],
+  ['[display:flex_]', '[display:flex]'],
+  ['[display:_flex_]', '[display:flex]'],
+
+  // Normalize whitespace in `calc` expressions
+  ['w-[calc(100%-2rem)]', 'w-[calc(100%-2rem)]'],
+  ['w-[calc(100%_-_2rem)]', 'w-[calc(100%-2rem)]'],
+
+  // Normalize the important modifier
+  ['!flex', 'flex!'],
+  ['flex!', 'flex!'],
+]
+
+const variants = [
+  ['', ''], // no variant
+  ['*:', '*:'],
+  ['focus:', 'focus:'],
+  ['group-focus:', 'group-focus:'],
+
+  ['hover:focus:', 'hover:focus:'],
+  ['hover:group-focus:', 'hover:group-focus:'],
+  ['group-hover:focus:', 'group-hover:focus:'],
+  ['group-hover:group-focus:', 'group-hover:group-focus:'],
+
+  ['min-[10px]:', 'min-[10px]:'],
+
+  // Normalize spaces
+  ['min-[calc(1000px_+_12em)]:', 'min-[calc(1000px+12em)]:'],
+  ['min-[calc(1000px_+12em)]:', 'min-[calc(1000px+12em)]:'],
+  ['min-[calc(1000px+_12em)]:', 'min-[calc(1000px+12em)]:'],
+  ['min-[calc(1000px___+___12em)]:', 'min-[calc(1000px+12em)]:'],
+
+  ['peer-[&_p]:', 'peer-[&_p]:'],
+  ['peer-[&_p]:hover:', 'peer-[&_p]:hover:'],
+  ['hover:peer-[&_p]:', 'hover:peer-[&_p]:'],
+  ['hover:peer-[&_p]:focus:', 'hover:peer-[&_p]:focus:'],
+  ['peer-[&:hover]:peer-[&_p]:', 'peer-[&:hover]:peer-[&_p]:'],
+
+  ['[p]:', '[p]:'],
+  ['[_p_]:', '[p]:'],
+  ['has-[p]:', 'has-[p]:'],
+  ['has-[_p_]:', 'has-[p]:'],
+
+  // Simplify `&:is(p)` to `p`
+  ['[&:is(p)]:', '[p]:'],
+  ['[&:is(_p_)]:', '[p]:'],
+  ['has-[&:is(p)]:', 'has-[p]:'],
+  ['has-[&:is(_p_)]:', 'has-[p]:'],
+
+  // Handle special `@` variants. These shouldn't be printed as `@-`
+  ['@xl:', '@xl:'],
+  ['@[123px]:', '@[123px]:'],
+]
+
+let combinations: [string, string][] = []
+
+for (let [inputVariant, outputVariant] of variants) {
+  for (let [inputCandidate, outputCandidate] of candidates) {
+    combinations.push([`${inputVariant}${inputCandidate}`, `${outputVariant}${outputCandidate}`])
+  }
+}
+
+describe('normalize candidates', () => {
+  test.each(combinations)('`%s` -> `%s`', async (candidate: string, result: string) => {
+    let designSystem = await __unstable__loadDesignSystem('@tailwind utilities', {
+      base: __dirname,
+    })
+
+    let [parsed] = designSystem.parseCandidate(candidate)
+
+    expect(designSystem.printCandidate(parsed)).toEqual(result)
+  })
 })

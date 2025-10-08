@@ -1,14 +1,16 @@
 import type { DesignSystem } from './design-system'
 import { decodeArbitraryValue } from './utils/decode-arbitrary-value'
+import { DefaultMap } from './utils/default-map'
 import { isValidArbitrary } from './utils/is-valid-arbitrary'
 import { segment } from './utils/segment'
+import * as ValueParser from './value-parser'
 
 const COLON = 0x3a
 const DASH = 0x2d
 const LOWER_A = 0x61
 const LOWER_Z = 0x7a
 
-type ArbitraryUtilityValue = {
+export type ArbitraryUtilityValue = {
   kind: 'arbitrary'
 
   /**
@@ -60,7 +62,7 @@ export type NamedUtilityValue = {
   fraction: string | null
 }
 
-type ArbitraryModifier = {
+export type ArbitraryModifier = {
   kind: 'arbitrary'
 
   /**
@@ -72,7 +74,7 @@ type ArbitraryModifier = {
   value: string
 }
 
-type NamedModifier = {
+export type NamedModifier = {
   kind: 'named'
 
   /**
@@ -212,6 +214,102 @@ export type Candidate =
       important: boolean
       raw: string
     }
+
+export function cloneCandidate<T extends Candidate>(candidate: T): T {
+  switch (candidate.kind) {
+    case 'arbitrary':
+      return {
+        kind: candidate.kind,
+        property: candidate.property,
+        value: candidate.value,
+        modifier: candidate.modifier
+          ? { kind: candidate.modifier.kind, value: candidate.modifier.value }
+          : null,
+        variants: candidate.variants.map(cloneVariant),
+        important: candidate.important,
+        raw: candidate.raw,
+      } satisfies Extract<Candidate, { kind: 'arbitrary' }> as T
+
+    case 'static':
+      return {
+        kind: candidate.kind,
+        root: candidate.root,
+        variants: candidate.variants.map(cloneVariant),
+        important: candidate.important,
+        raw: candidate.raw,
+      } satisfies Extract<Candidate, { kind: 'static' }> as T
+
+    case 'functional':
+      return {
+        kind: candidate.kind,
+        root: candidate.root,
+        value: candidate.value
+          ? candidate.value.kind === 'arbitrary'
+            ? {
+                kind: candidate.value.kind,
+                dataType: candidate.value.dataType,
+                value: candidate.value.value,
+              }
+            : {
+                kind: candidate.value.kind,
+                value: candidate.value.value,
+                fraction: candidate.value.fraction,
+              }
+          : null,
+        modifier: candidate.modifier
+          ? { kind: candidate.modifier.kind, value: candidate.modifier.value }
+          : null,
+        variants: candidate.variants.map(cloneVariant),
+        important: candidate.important,
+        raw: candidate.raw,
+      } satisfies Extract<Candidate, { kind: 'functional' }> as T
+
+    default:
+      candidate satisfies never
+      throw new Error('Unknown candidate kind')
+  }
+}
+
+export function cloneVariant<T extends Variant>(variant: T): T {
+  switch (variant.kind) {
+    case 'arbitrary':
+      return {
+        kind: variant.kind,
+        selector: variant.selector,
+        relative: variant.relative,
+      } satisfies Extract<Variant, { kind: 'arbitrary' }> as T
+
+    case 'static':
+      return { kind: variant.kind, root: variant.root } satisfies Extract<
+        Variant,
+        { kind: 'static' }
+      > as T
+
+    case 'functional':
+      return {
+        kind: variant.kind,
+        root: variant.root,
+        value: variant.value ? { kind: variant.value.kind, value: variant.value.value } : null,
+        modifier: variant.modifier
+          ? { kind: variant.modifier.kind, value: variant.modifier.value }
+          : null,
+      } satisfies Extract<Variant, { kind: 'functional' }> as T
+
+    case 'compound':
+      return {
+        kind: variant.kind,
+        root: variant.root,
+        variant: cloneVariant(variant.variant),
+        modifier: variant.modifier
+          ? { kind: variant.modifier.kind, value: variant.modifier.value }
+          : null,
+      } satisfies Extract<Variant, { kind: 'compound' }> as T
+
+    default:
+      variant satisfies never
+      throw new Error('Unknown variant kind')
+  }
+}
 
 export function* parseCandidate(input: string, designSystem: DesignSystem): Iterable<Candidate> {
   // hover:focus:underline
@@ -383,6 +481,7 @@ export function* parseCandidate(input: string, designSystem: DesignSystem): Iter
   //
   // E.g.:
   //
+  // ```
   // bg-(--my-var)
   // ^^            -> Root
   //    ^^^^^^^^^^ -> Arbitrary value
@@ -409,7 +508,10 @@ export function* parseCandidate(input: string, designSystem: DesignSystem): Iter
 
     // An arbitrary value with `(…)` should always start with `--` since it
     // represents a CSS variable.
-    if (value[0] !== '-' && value[1] !== '-') return
+    if (value[0] !== '-' || value[1] !== '-') return
+
+    // Values can't contain `;` or `}` characters at the top-level.
+    if (!isValidArbitrary(value)) return
 
     roots = [[root, dataType === null ? `[var(${value})]` : `[${dataType}:var(${value})]`]]
   }
@@ -521,21 +623,24 @@ function parseModifier(modifier: string): CandidateModifier | null {
   }
 
   if (modifier[0] === '(' && modifier[modifier.length - 1] === ')') {
-    let arbitraryValue = decodeArbitraryValue(modifier.slice(1, -1))
+    // Drop the `(` and `)` characters
+    modifier = modifier.slice(1, -1)
+
+    // A modifier with `(…)` should always start with `--` since it
+    // represents a CSS variable.
+    if (modifier[0] !== '-' || modifier[1] !== '-') return null
 
     // Values can't contain `;` or `}` characters at the top-level.
-    if (!isValidArbitrary(arbitraryValue)) return null
+    if (!isValidArbitrary(modifier)) return null
 
-    // Empty arbitrary values are invalid. E.g.: `data-():`
-    //                                                 ^^
-    if (arbitraryValue.length === 0 || arbitraryValue.trim().length === 0) return null
+    // Wrap the value in `var(…)` to ensure that it is a valid CSS variable.
+    modifier = `var(${modifier})`
 
-    // Arbitrary values must start with `--` since it represents a CSS variable.
-    if (arbitraryValue[0] !== '-' && arbitraryValue[1] !== '-') return null
+    let arbitraryValue = decodeArbitraryValue(modifier)
 
     return {
       kind: 'arbitrary',
-      value: `var(${arbitraryValue})`,
+      value: arbitraryValue,
     }
   }
 
@@ -677,7 +782,7 @@ export function parseVariant(variant: string, designSystem: DesignSystem): Varia
             if (arbitraryValue.length === 0 || arbitraryValue.trim().length === 0) return null
 
             // Arbitrary values must start with `--` since it represents a CSS variable.
-            if (arbitraryValue[0] !== '-' && arbitraryValue[1] !== '-') return null
+            if (arbitraryValue[0] !== '-' || arbitraryValue[1] !== '-') return null
 
             return {
               kind: 'functional',
@@ -745,14 +850,6 @@ function* findRoots(input: string, exists: (input: string) => boolean): Iterable
   // Otherwise test every permutation of the input by iteratively removing
   // everything after the last dash.
   let idx = input.lastIndexOf('-')
-  if (idx === -1) {
-    // Variants starting with `@` are special because they don't need a `-`
-    // after the `@` (E.g.: `@-lg` should be written as `@lg`).
-    if (input[0] === '@' && exists('@')) {
-      yield ['@', input.slice(1)]
-    }
-    return
-  }
 
   // Determine the root and value by testing permutations of the incoming input.
   //
@@ -761,7 +858,7 @@ function* findRoots(input: string, exists: (input: string) => boolean): Iterable
   // `bg-red-500` -> No match
   // `bg-red`     -> No match
   // `bg`         -> Match
-  do {
+  while (idx > 0) {
     let maybeRoot = input.slice(0, idx)
 
     if (exists(maybeRoot)) {
@@ -772,9 +869,300 @@ function* findRoots(input: string, exists: (input: string) => boolean): Iterable
       // can skip any further parsing.
       if (root[1] === '') break
 
+      // Edge case: `@-…` is not valid as a variant or a utility so we want to
+      // skip if an `@` is followed by a `-`. Otherwise `@-2xl:flex` and
+      // `@-2xl:flex` would be considered the same.
+      if (root[0] === '@' && exists('@') && input[idx] === '-') break
+
       yield root
     }
 
     idx = input.lastIndexOf('-', idx - 1)
-  } while (idx > 0)
+  }
+
+  // Try '@' variant after permutations. This allows things like `@max` of `@max-foo-bar`
+  // to match before looking for `@`.
+  if (input[0] === '@' && exists('@')) {
+    yield ['@', input.slice(1)]
+  }
+}
+
+export function printCandidate(designSystem: DesignSystem, candidate: Candidate) {
+  let parts: string[] = []
+
+  for (let variant of candidate.variants) {
+    parts.unshift(printVariant(variant))
+  }
+
+  // Handle prefix
+  if (designSystem.theme.prefix) {
+    parts.unshift(designSystem.theme.prefix)
+  }
+
+  let base: string = ''
+
+  // Handle static
+  if (candidate.kind === 'static') {
+    base += candidate.root
+  }
+
+  // Handle functional
+  if (candidate.kind === 'functional') {
+    base += candidate.root
+
+    if (candidate.value) {
+      if (candidate.value.kind === 'arbitrary') {
+        if (candidate.value !== null) {
+          let isVarValue = isVar(candidate.value.value)
+          let value = isVarValue ? candidate.value.value.slice(4, -1) : candidate.value.value
+          let [open, close] = isVarValue ? ['(', ')'] : ['[', ']']
+
+          if (candidate.value.dataType) {
+            base += `-${open}${candidate.value.dataType}:${printArbitraryValue(value)}${close}`
+          } else {
+            base += `-${open}${printArbitraryValue(value)}${close}`
+          }
+        }
+      } else if (candidate.value.kind === 'named') {
+        base += `-${candidate.value.value}`
+      }
+    }
+  }
+
+  // Handle arbitrary
+  if (candidate.kind === 'arbitrary') {
+    base += `[${candidate.property}:${printArbitraryValue(candidate.value)}]`
+  }
+
+  // Handle modifier
+  if (candidate.kind === 'arbitrary' || candidate.kind === 'functional') {
+    base += printModifier(candidate.modifier)
+  }
+
+  // Handle important
+  if (candidate.important) {
+    base += '!'
+  }
+
+  parts.push(base)
+
+  return parts.join(':')
+}
+
+export function printModifier(modifier: ArbitraryModifier | NamedModifier | null) {
+  if (modifier === null) return ''
+
+  let isVarValue = isVar(modifier.value)
+  let value = isVarValue ? modifier.value.slice(4, -1) : modifier.value
+  let [open, close] = isVarValue ? ['(', ')'] : ['[', ']']
+
+  if (modifier.kind === 'arbitrary') {
+    return `/${open}${printArbitraryValue(value)}${close}`
+  } else if (modifier.kind === 'named') {
+    return `/${modifier.value}`
+  } else {
+    modifier satisfies never
+    return ''
+  }
+}
+
+export function printVariant(variant: Variant) {
+  // Handle static variants
+  if (variant.kind === 'static') {
+    return variant.root
+  }
+
+  // Handle arbitrary variants
+  if (variant.kind === 'arbitrary') {
+    return `[${printArbitraryValue(simplifyArbitraryVariant(variant.selector))}]`
+  }
+
+  let base: string = ''
+
+  // Handle functional variants
+  if (variant.kind === 'functional') {
+    base += variant.root
+    // `@` is a special case for functional variants. We want to print: `@lg`
+    // instead of `@-lg`
+    let hasDash = variant.root !== '@'
+    if (variant.value) {
+      if (variant.value.kind === 'arbitrary') {
+        let isVarValue = isVar(variant.value.value)
+        let value = isVarValue ? variant.value.value.slice(4, -1) : variant.value.value
+        let [open, close] = isVarValue ? ['(', ')'] : ['[', ']']
+
+        base += `${hasDash ? '-' : ''}${open}${printArbitraryValue(value)}${close}`
+      } else if (variant.value.kind === 'named') {
+        base += `${hasDash ? '-' : ''}${variant.value.value}`
+      }
+    }
+  }
+
+  // Handle compound variants
+  if (variant.kind === 'compound') {
+    base += variant.root
+    base += '-'
+    base += printVariant(variant.variant)
+  }
+
+  // Handle modifiers
+  if (variant.kind === 'functional' || variant.kind === 'compound') {
+    base += printModifier(variant.modifier)
+  }
+
+  return base
+}
+
+const printArbitraryValueCache = new DefaultMap<string, string>((input) => {
+  let ast = ValueParser.parse(input)
+
+  let drop = new Set<ValueParser.ValueAstNode>()
+
+  ValueParser.walk(ast, (node, { parent }) => {
+    let parentArray = parent === null ? ast : (parent.nodes ?? [])
+
+    // Handle operators (e.g.: inside of `calc(…)`)
+    if (
+      node.kind === 'word' &&
+      // Operators
+      (node.value === '+' || node.value === '-' || node.value === '*' || node.value === '/')
+    ) {
+      let idx = parentArray.indexOf(node) ?? -1
+
+      // This should not be possible
+      if (idx === -1) return
+
+      let previous = parentArray[idx - 1]
+      if (previous?.kind !== 'separator' || previous.value !== ' ') return
+
+      let next = parentArray[idx + 1]
+      if (next?.kind !== 'separator' || next.value !== ' ') return
+
+      drop.add(previous)
+      drop.add(next)
+    }
+
+    // The value parser handles `/` as a separator in some scenarios. E.g.:
+    // `theme(colors.red/50%)`. Because of this, we have to handle this case
+    // separately.
+    else if (node.kind === 'separator' && node.value.trim() === '/') {
+      node.value = '/'
+    }
+
+    // Leading and trailing whitespace
+    else if (node.kind === 'separator' && node.value.length > 0 && node.value.trim() === '') {
+      if (parentArray[0] === node || parentArray[parentArray.length - 1] === node) {
+        drop.add(node)
+      }
+    }
+
+    // Whitespace around `,` separators can be removed.
+    // E.g.: `min(1px , 2px)` -> `min(1px,2px)`
+    else if (node.kind === 'separator' && node.value.trim() === ',') {
+      node.value = ','
+    }
+  })
+
+  if (drop.size > 0) {
+    ValueParser.walk(ast, (node, { replaceWith }) => {
+      if (drop.has(node)) {
+        drop.delete(node)
+        replaceWith([])
+      }
+    })
+  }
+
+  recursivelyEscapeUnderscores(ast)
+
+  return ValueParser.toCss(ast)
+})
+export function printArbitraryValue(input: string) {
+  return printArbitraryValueCache.get(input)
+}
+
+const simplifyArbitraryVariantCache = new DefaultMap<string, string>((input) => {
+  let ast = ValueParser.parse(input)
+
+  // &:is(…)
+  if (
+    ast.length === 3 &&
+    // &
+    ast[0].kind === 'word' &&
+    ast[0].value === '&' &&
+    // :
+    ast[1].kind === 'separator' &&
+    ast[1].value === ':' &&
+    // is(…)
+    ast[2].kind === 'function' &&
+    ast[2].value === 'is'
+  ) {
+    return ValueParser.toCss(ast[2].nodes)
+  }
+
+  return input
+})
+function simplifyArbitraryVariant(input: string) {
+  return simplifyArbitraryVariantCache.get(input)
+}
+
+function recursivelyEscapeUnderscores(ast: ValueParser.ValueAstNode[]) {
+  for (let node of ast) {
+    switch (node.kind) {
+      case 'function': {
+        if (node.value === 'url' || node.value.endsWith('_url')) {
+          // Don't decode underscores in url() but do decode the function name
+          node.value = escapeUnderscore(node.value)
+          break
+        }
+
+        if (
+          node.value === 'var' ||
+          node.value.endsWith('_var') ||
+          node.value === 'theme' ||
+          node.value.endsWith('_theme')
+        ) {
+          node.value = escapeUnderscore(node.value)
+          for (let i = 0; i < node.nodes.length; i++) {
+            recursivelyEscapeUnderscores([node.nodes[i]])
+          }
+          break
+        }
+
+        node.value = escapeUnderscore(node.value)
+        recursivelyEscapeUnderscores(node.nodes)
+        break
+      }
+      case 'separator':
+        node.value = escapeUnderscore(node.value)
+        break
+      case 'word': {
+        // Dashed idents and variables `var(--my-var)` and `--my-var` should not
+        // have underscores escaped
+        if (node.value[0] !== '-' || node.value[1] !== '-') {
+          node.value = escapeUnderscore(node.value)
+        }
+        break
+      }
+      default:
+        never(node)
+    }
+  }
+}
+
+const isVarCache = new DefaultMap<string, boolean>((value) => {
+  let ast = ValueParser.parse(value)
+  return ast.length === 1 && ast[0].kind === 'function' && ast[0].value === 'var'
+})
+function isVar(value: string) {
+  return isVarCache.get(value)
+}
+
+function never(value: never): never {
+  throw new Error(`Unexpected value: ${value}`)
+}
+
+function escapeUnderscore(value: string): string {
+  return value
+    .replaceAll('_', String.raw`\_`) // Escape underscores to keep them as-is
+    .replaceAll(' ', '_') // Replace spaces with underscores
 }

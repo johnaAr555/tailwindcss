@@ -1,8 +1,10 @@
 import { Features } from '.'
-import { rule, toCss, walk, WalkAction, type AstNode } from './ast'
+import { cloneAstNode, rule, toCss, walk, WalkAction, type AstNode } from './ast'
 import { compileCandidates } from './compile'
 import type { DesignSystem } from './design-system'
+import type { SourceLocation } from './source-maps/source'
 import { DefaultMap } from './utils/default-map'
+import { segment } from './utils/segment'
 
 export function substituteAtApply(ast: AstNode[], designSystem: DesignSystem) {
   let features = Features.None
@@ -23,7 +25,7 @@ export function substituteAtApply(ast: AstNode[], designSystem: DesignSystem) {
   let definitions = new DefaultMap(() => new Set<AstNode>())
 
   // Collect all new `@utility` definitions and all `@apply` rules first
-  walk([root], (node, { parent }) => {
+  walk([root], (node, { parent, path }) => {
     if (node.kind !== 'at-rule') return
 
     // Do not allow `@apply` rules inside `@keyframes` rules.
@@ -66,7 +68,12 @@ export function substituteAtApply(ast: AstNode[], designSystem: DesignSystem) {
       parents.add(parent)
 
       for (let dependency of resolveApplyDependencies(node, designSystem)) {
-        dependencies.get(parent).add(dependency)
+        // Mark every parent in the path as having a dependency to that utility.
+        for (let parent of path) {
+          if (parent === node) continue
+          if (!parents.has(parent)) continue
+          dependencies.get(parent).add(dependency)
+        }
       }
     }
   })
@@ -151,21 +158,124 @@ export function substituteAtApply(ast: AstNode[], designSystem: DesignSystem) {
   for (let parent of sorted) {
     if (!('nodes' in parent)) continue
 
-    for (let i = 0; i < parent.nodes.length; i++) {
-      let node = parent.nodes[i]
-      if (node.kind !== 'at-rule' || node.name !== '@apply') continue
+    walk(parent.nodes, (child, { replaceWith }) => {
+      if (child.kind !== 'at-rule' || child.name !== '@apply') return
 
-      let candidates = node.params.split(/\s+/g)
+      let parts = child.params.split(/(\s+)/g)
+      let candidateOffsets: Record<string, number> = {}
+
+      let offset = 0
+      for (let [idx, part] of parts.entries()) {
+        if (idx % 2 === 0) candidateOffsets[part] = offset
+        offset += part.length
+      }
 
       // Replace the `@apply` rule with the actual utility classes
       {
         // Parse the candidates to an AST that we can replace the `@apply` rule
         // with.
-        let candidateAst = compileCandidates(candidates, designSystem, {
+        let candidates = Object.keys(candidateOffsets)
+        let compiled = compileCandidates(candidates, designSystem, {
+          respectImportant: false,
           onInvalidCandidate: (candidate) => {
-            throw new Error(`Cannot apply unknown utility class: ${candidate}`)
+            // When using prefix, make sure prefix is used in candidate
+            if (designSystem.theme.prefix && !candidate.startsWith(designSystem.theme.prefix)) {
+              throw new Error(
+                `Cannot apply unprefixed utility class \`${candidate}\`. Did you mean \`${designSystem.theme.prefix}:${candidate}\`?`,
+              )
+            }
+
+            // When the utility is blocklisted, let the user know
+            //
+            // Note: `@apply` is processed before handling incoming classes from
+            // template files. This means that the `invalidCandidates` set will
+            // only contain explicit classes via:
+            //
+            // - `blocklist` from a JS config
+            // - `@source not inline(…)`
+            if (designSystem.invalidCandidates.has(candidate)) {
+              throw new Error(
+                `Cannot apply utility class \`${candidate}\` because it has been explicitly disabled: https://tailwindcss.com/docs/detecting-classes-in-source-files#explicitly-excluding-classes`,
+              )
+            }
+
+            // Verify if variants exist
+            let parts = segment(candidate, ':')
+            if (parts.length > 1) {
+              let utility = parts.pop()!
+
+              // Ensure utility on its own compiles, if not, we will fallback to
+              // the next error
+              if (designSystem.candidatesToCss([utility])[0]) {
+                let compiledVariants = designSystem.candidatesToCss(
+                  parts.map((variant) => `${variant}:[--tw-variant-check:1]`),
+                )
+                let unknownVariants = parts.filter((_, idx) => compiledVariants[idx] === null)
+                if (unknownVariants.length > 0) {
+                  if (unknownVariants.length === 1) {
+                    throw new Error(
+                      `Cannot apply utility class \`${candidate}\` because the ${unknownVariants.map((variant) => `\`${variant}\``)} variant does not exist.`,
+                    )
+                  } else {
+                    let formatter = new Intl.ListFormat('en', {
+                      style: 'long',
+                      type: 'conjunction',
+                    })
+                    throw new Error(
+                      `Cannot apply utility class \`${candidate}\` because the ${formatter.format(unknownVariants.map((variant) => `\`${variant}\``))} variants do not exist.`,
+                    )
+                  }
+                }
+              }
+            }
+
+            // When the theme is empty, it means that no theme was loaded and
+            // `@import "tailwindcss"`, `@reference "app.css"` or similar is
+            // very likely missing.
+            if (designSystem.theme.size === 0) {
+              throw new Error(
+                `Cannot apply unknown utility class \`${candidate}\`. Are you using CSS modules or similar and missing \`@reference\`? https://tailwindcss.com/docs/functions-and-directives#reference-directive`,
+              )
+            }
+
+            // Fallback to most generic error message
+            throw new Error(`Cannot apply unknown utility class \`${candidate}\``)
           },
-        }).astNodes
+        })
+
+        let src = child.src
+
+        let candidateAst = compiled.astNodes.map((node) => {
+          let candidate = compiled.nodeSorting.get(node)?.candidate
+          let candidateOffset = candidate ? candidateOffsets[candidate] : undefined
+
+          node = cloneAstNode(node)
+
+          if (!src || !candidate || candidateOffset === undefined) {
+            // While the original nodes may have come from an `@utility` we still
+            // want to replace the source because the `@apply` is ultimately the
+            // reason the node was emitted into the AST.
+            walk([node], (node) => {
+              node.src = src
+            })
+
+            return node
+          }
+
+          let candidateSrc: SourceLocation = [src[0], src[1], src[2]]
+
+          candidateSrc[1] += 7 /* '@apply '.length */ + candidateOffset
+          candidateSrc[2] = candidateSrc[1] + candidate.length
+
+          // While the original nodes may have come from an `@utility` we still
+          // want to replace the source because the `@apply` is ultimately the
+          // reason the node was emitted into the AST.
+          walk([node], (node) => {
+            node.src = candidateSrc
+          })
+
+          return node
+        })
 
         // Collect the nodes to insert in place of the `@apply` rule. When a rule
         // was used, we want to insert its children instead of the rule because we
@@ -181,10 +291,11 @@ export function substituteAtApply(ast: AstNode[], designSystem: DesignSystem) {
           }
         }
 
-        parent.nodes.splice(i, 1, ...newNodes)
+        replaceWith(newNodes)
       }
-    }
+    })
   }
+
   return features
 }
 

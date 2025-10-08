@@ -1,4 +1,4 @@
-import { type AtRule } from './ast'
+import { type AtRule, type Declaration } from './ast'
 import { escape, unescape } from './utils/escape'
 
 export const enum ThemeOptions {
@@ -28,6 +28,8 @@ const ignoredThemeKeyMap = new Map([
       '--text-underline-offset',
     ],
   ],
+  ['--grid-column', ['--grid-column-start', '--grid-column-end']],
+  ['--grid-row', ['--grid-row-start', '--grid-row-end']],
 ])
 
 function isIgnoredThemeKey(themeKey: ThemeKey, namespace: ThemeKey) {
@@ -40,11 +42,22 @@ export class Theme {
   public prefix: string | null = null
 
   constructor(
-    private values = new Map<string, { value: string; options: ThemeOptions }>(),
+    private values = new Map<
+      string,
+      {
+        value: string
+        options: ThemeOptions
+        src: Declaration['src']
+      }
+    >(),
     private keyframes = new Set<AtRule>([]),
   ) {}
 
-  add(key: string, value: string, options = ThemeOptions.NONE): void {
+  get size() {
+    return this.values.size
+  }
+
+  add(key: string, value: string, options = ThemeOptions.NONE, src?: Declaration['src']): void {
     if (key.endsWith('-*')) {
       if (value !== 'initial') {
         throw new Error(`Invalid theme value \`${value}\` for namespace \`${key}\``)
@@ -68,7 +81,7 @@ export class Theme {
     if (value === 'initial') {
       this.values.delete(key)
     } else {
-      this.values.set(key, { value, options })
+      this.values.set(key, { value, options, src })
     }
   }
 

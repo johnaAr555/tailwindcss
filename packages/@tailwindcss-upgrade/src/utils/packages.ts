@@ -1,4 +1,5 @@
 import { exec as execCb } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -12,13 +13,32 @@ const SAVE_DEV: Record<string, string> = {
   bun: '-d',
 }
 
+const manifests = new DefaultMap((base) => {
+  try {
+    let packageJsonPath = resolve(base, 'package.json')
+    return readFileSync(packageJsonPath, 'utf-8')
+  } catch {
+    return ''
+  }
+})
+
 export function pkg(base: string) {
   return {
+    async manager() {
+      return await packageManagerForBase.get(base)
+    },
     async add(packages: string[], location: 'dependencies' | 'devDependencies' = 'dependencies') {
       let packageManager = await packageManagerForBase.get(base)
       let args = packages.slice()
       if (location === 'devDependencies') {
         args.push(SAVE_DEV[packageManager] || SAVE_DEV.default)
+      }
+
+      // Allow running the `pnpm` command in the workspace root without
+      // erroring. Can't just use `--workspace-root` because that will force
+      // install dependencies in the workspace root.
+      if (packageManager === 'pnpm') {
+        args.push('--ignore-workspace-root-check')
       }
 
       let command = `${packageManager} add ${args.join(' ')}`
@@ -29,7 +49,12 @@ export function pkg(base: string) {
           prefix: '↳ ',
         })
         throw e
+      } finally {
+        manifests.delete(base)
       }
+    },
+    has(name: string) {
+      return manifests.get(base).includes(`"${name}":`)
     },
     async remove(packages: string[]) {
       let packageManager = await packageManagerForBase.get(base)
@@ -41,6 +66,8 @@ export function pkg(base: string) {
           prefix: '↳ ',
         })
         throw e
+      } finally {
+        manifests.delete(base)
       }
     },
   }
